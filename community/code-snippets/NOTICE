@@ -1,0 +1,31 @@
+Code Snippets for AniMathIO
+Copyright (c) 2026 AniMathIO contributors. MIT (see ../../LICENSE).
+
+Behavioral port / inspiration:
+Shiki Magic Move, Anthony Fu
+https://github.com/shikijs/shiki-magic-move/tree/v1.1.0
+MIT License, copyright (c) 2022 Anthony Fu.
+Studied src/core.ts (token matching) and src/renderer.ts (retained token movement,
+enter/leave transitions). This plugin reimplements those ideas in Rust: bounded
+lexical-token LCS plus one-to-one moved-identifier matching; position interpolation
+and opacity driven by a supplied progress parameter. No TypeScript, CSS, Shiki
+runtime, upstream syntax grammar or animation source code is copied.
+The upstream license is retained in assets/shiki-magic-move-LICENSE.
+
+Embedded font:
+JetBrains Mono Regular, version 2.304, unmodified
+https://github.com/JetBrains/JetBrainsMono/tree/v2.304
+Copyright 2020 The JetBrains Mono Project Authors
+SIL Open Font License 1.1; full license: assets/OFL.txt.
+
+Syntax highlighting / themes:
+syntect 5.3 (MIT), Tristan Hume, Keith Hall, Google Inc and contributors
+https://github.com/trishume/syntect
+Full license: assets/syntect-LICENSE. Its default theme dump is embedded.
+The small lexical grammars in syntaxes/ are original MIT code for this plugin.
+No external grammar dump is embedded. Uses fancy-regex (MIT), not Oniguruma.
+
+Font outlines use ttf-parser (MIT OR Apache-2.0):
+https://github.com/harfbuzz/ttf-parser
+Other Rust dependencies retain their respective permissive licenses; the exact
+resolved dependency set is in Cargo.lock.

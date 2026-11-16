@@ -1,0 +1,40 @@
+%YAML 1.2
+---
+name: cpp
+file_extensions: [cpp]
+scope: source.cpp
+contexts:
+  main:
+    - match: '//.*$'
+      scope: comment.line
+    - match: '/\*'
+      push:
+        - meta_scope: comment.block
+        - match: '\*/'
+          pop: true
+    - match: '"'
+      push:
+        - meta_scope: string.quoted
+        - match: '\\.'
+          scope: constant.character.escape
+        - match: '"'
+          pop: true
+    - match: ''''
+      push:
+        - meta_scope: string.quoted
+        - match: '\\.'
+          scope: constant.character.escape
+        - match: ''''
+          pop: true
+    - match: '\b(?:alignas|alignof|asm|auto|bool|break|case|catch|char|class|concept|const|constexpr|consteval|constinit|continue|co_await|co_return|co_yield|decltype|default|delete|do|double|else|enum|explicit|export|extern|false|float|for|friend|goto|if|inline|int|long|mutable|namespace|new|noexcept|nullptr|operator|private|protected|public|register|reinterpret_cast|requires|return|short|signed|sizeof|static|static_assert|struct|switch|template|this|thread_local|throw|true|try|typedef|typename|union|unsigned|using|virtual|void|volatile|wchar_t|while)\b'
+      scope: keyword.control
+    - match: '\b(?:0[xX][0-9a-fA-F_]+|[0-9][0-9_]*(?:\.[0-9_]+)?(?:[eE][+-]?[0-9]+)?)\b'
+      scope: constant.numeric
+    - match: '\b[A-Za-z_][A-Za-z0-9_]*(?=\s*\()'
+      scope: entity.name.function
+    - match: '[+*/%=!<>&|^~?:-]+'
+      scope: keyword.operator
+    - match: '[{}\[\]();,.]'
+      scope: punctuation.separator
+    - match: '\b[A-Z][A-Za-z0-9_]*\b'
+      scope: entity.name.type

@@ -26,9 +26,10 @@ jobs:
       - name: Build and package every plugin
         run: |
           mkdir -p target/plugins
-          for dir in .generated/generated-circle examples/*; do
+          for dir in .generated/generated-circle examples/* community/*; do
             cargo fmt --manifest-path "$dir/Cargo.toml" --check
             cargo clippy --manifest-path "$dir/Cargo.toml" --target wasm32-wasip2 --locked -- -D warnings
+            cargo test --manifest-path "$dir/Cargo.toml" --workspace --locked
             bash "$dir/build.sh"
             cp "$dir"/target/*.amplugin target/plugins/
           done
@@ -41,3 +42,16 @@ jobs:
           dpkg-deb -x .host/*.deb .host/extracted
           python3 -m pip install Pillow
           python3 scripts/smoke.py .host/extracted/usr/bin/animathio-cli target/plugins
+      - name: Test Code Snippets on released 2.1.0
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download v2.1.0 --repo AniMathIO/AniMathIO --pattern '*AppImage' --dir .host/code-snippets
+          echo 'cce18dd8215aa9c23ba7c5756e6c0785c1931dd027aadf31a7bbbf3b92fac6ec  .host/code-snippets/animathio_2.1.0_x86_64.AppImage' | sha256sum -c -
+          chmod +x .host/code-snippets/*.AppImage
+          (cd .host/code-snippets && ./animathio_2.1.0_x86_64.AppImage --appimage-extract > /dev/null)
+          python3 community/code-snippets/smoke.py .host/code-snippets/squashfs-root/usr/bin/animathio-cli target/plugins
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: plugins
+          path: target/plugins/*.amplugin

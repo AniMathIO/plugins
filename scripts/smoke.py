@@ -36,7 +36,7 @@ with tempfile.TemporaryDirectory(dir=plugins.parent) as temporary:
     for package in sorted(plugins.glob('*.amplugin')):
         with zipfile.ZipFile(package) as bundle:
             manifest = tomllib.loads(bundle.read('plugin.toml').decode())
-        if manifest['kinds'] == ['clip-source']:
+        if manifest['kinds'] == ['clip-source'] and manifest['id'] in ['org.example.circle', 'org.example.generated-circle']:
             sources.append(manifest['id'])
     assert sources, 'No source plugins to test'
 

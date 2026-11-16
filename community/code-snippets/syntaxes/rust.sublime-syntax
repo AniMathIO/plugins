@@ -1,0 +1,40 @@
+%YAML 1.2
+---
+name: rust
+file_extensions: [rs]
+scope: source.rust
+contexts:
+  main:
+    - match: '//.*$'
+      scope: comment.line
+    - match: '/\*'
+      push:
+        - meta_scope: comment.block
+        - match: '\*/'
+          pop: true
+    - match: '"'
+      push:
+        - meta_scope: string.quoted
+        - match: '\\.'
+          scope: constant.character.escape
+        - match: '"'
+          pop: true
+    - match: ''''
+      push:
+        - meta_scope: string.quoted
+        - match: '\\.'
+          scope: constant.character.escape
+        - match: ''''
+          pop: true
+    - match: '\b(?:as|async|await|break|const|continue|crate|dyn|else|enum|extern|false|fn|for|if|impl|in|let|loop|match|mod|move|mut|pub|ref|return|self|Self|static|struct|super|trait|true|type|unsafe|use|where|while|union)\b'
+      scope: keyword.control
+    - match: '\b(?:0[xX][0-9a-fA-F_]+|[0-9][0-9_]*(?:\.[0-9_]+)?(?:[eE][+-]?[0-9]+)?)\b'
+      scope: constant.numeric
+    - match: '\b[A-Za-z_][A-Za-z0-9_]*(?=\s*\()'
+      scope: entity.name.function
+    - match: '[+*/%=!<>&|^~?:-]+'
+      scope: keyword.operator
+    - match: '[{}\[\]();,.]'
+      scope: punctuation.separator
+    - match: '\b[A-Z][A-Za-z0-9_]*\b'
+      scope: entity.name.type

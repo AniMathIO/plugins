@@ -1,0 +1,44 @@
+%YAML 1.2
+---
+name: bash
+file_extensions: [sh]
+scope: source.shell
+contexts:
+  main:
+    - match: '\#.*$'
+      scope: comment.line
+    - match: '"'
+      push:
+        - meta_scope: string.quoted
+        - match: '\\.'
+          scope: constant.character.escape
+        - match: '"'
+          pop: true
+    - match: ''''
+      push:
+        - meta_scope: string.quoted
+        - match: '\\.'
+          scope: constant.character.escape
+        - match: ''''
+          pop: true
+    - match: '`'
+      push:
+        - meta_scope: string.quoted
+        - match: '\\.'
+          scope: constant.character.escape
+        - match: '`'
+          pop: true
+    - match: '\b(?:if|then|else|elif|fi|for|while|in|do|done|case|esac|function|select|until|time|coproc|break|continue|return|export|local|readonly|declare|typeset|let|eval|exec|exit|source|alias|unalias|set|unset|shift|trap|echo|printf|read|cd|pwd)\b'
+      scope: keyword.control
+    - match: '\b(?:0[xX][0-9a-fA-F_]+|[0-9][0-9_]*(?:\.[0-9_]+)?(?:[eE][+-]?[0-9]+)?)\b'
+      scope: constant.numeric
+    - match: '\$\{?[A-Za-z_][A-Za-z0-9_]*\}?'
+      scope: variable.other
+    - match: '\b[A-Za-z_][A-Za-z0-9_]*(?=\s*\()'
+      scope: entity.name.function
+    - match: '[+*/%=!<>&|^~?:-]+'
+      scope: keyword.operator
+    - match: '[{}\[\]();,.]'
+      scope: punctuation.separator
+    - match: '\b[A-Z][A-Za-z0-9_]*\b'
+      scope: entity.name.type
