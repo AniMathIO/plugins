@@ -21,9 +21,13 @@ of these releases (see [docs/registry.md](docs/registry.md)). The plugin must be
 
 3. `release-plugin.yml` checks that the tag is on `main`, that `plugin.toml` has this id and
    version, builds the plugin with its `build.sh`, loads and renders it with the released
-   AniMathIO CLI, and creates the release with `<id>-<version>.amplugin` and
+   AniMathIO CLI in a read-only job (without persisted checkout credentials), and uploads
+   the assets. A separate publish runner re-verifies the SHA-256 and creates the release with
+   `<id>-<version>.amplugin` and
    `<id>-<version>.amplugin.sha256`. It then calls `index.yml`, which commits the refreshed
-   `community-index.json` to `main`.
+   `community-index.json` to `main`. Index generation also runs read-only; a separate runner
+   only copies and commits the generated JSON. Neither write-enabled job executes plugin code
+   or repository build scripts.
 4. Check that the run is green, that
    <https://raw.githubusercontent.com/AniMathIO/plugins/main/community-index.json> lists the new
    version, and that `sha256sum -c` passes on the downloaded assets.

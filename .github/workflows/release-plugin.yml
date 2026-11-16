@@ -16,21 +16,25 @@ on:
 permissions:
   contents: read
 jobs:
-  release:
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
-      contents: write
+      contents: read
+    outputs:
+      id: ${{ steps.plugin.outputs.id }}
+      version: ${{ steps.plugin.outputs.version }}
+      tag: ${{ steps.plugin.outputs.tag }}
     env:
       CARGO_BUILD_JOBS: 3
       CARGO_PROFILE_DEV_DEBUG: 0
       CARGO_INCREMENTAL: 0
       ANIMATHIO_AUDIO: none
-      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Only release what is on main
         run: |
           git fetch origin main
@@ -50,14 +54,6 @@ jobs:
           else
             python3 scripts/registry.py resolve --path "$INPUT_PATH" | tee -a "$GITHUB_OUTPUT"
           fi
-      - name: Refuse to replace an existing release
-        env:
-          TAG: ${{ steps.plugin.outputs.tag }}
-        run: |
-          if gh release view "$TAG" > /dev/null 2>&1; then
-            echo "::error::release $TAG already exists; bump the version in plugin.toml"
-            exit 1
-          fi
       - name: Build and package
         env:
           PLUGIN_PATH: ${{ steps.plugin.outputs.path }}
@@ -71,19 +67,64 @@ jobs:
         env:
           PLUGIN_ID: ${{ steps.plugin.outputs.id }}
         run: python3 scripts/registry_smoke.py "${{ steps.cli.outputs.cli }}" dist --only "$PLUGIN_ID"
+      - name: Upload release assets
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: plugin-release
+          path: |
+            dist/${{ steps.plugin.outputs.id }}-${{ steps.plugin.outputs.version }}.amplugin
+            dist/${{ steps.plugin.outputs.id }}-${{ steps.plugin.outputs.version }}.amplugin.sha256
+          if-no-files-found: error
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    # A fresh runner: never check out the repository or execute downloaded code here.
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: plugin-release
+          path: dist
+      - name: Verify release assets
+        env:
+          PLUGIN_ID: ${{ needs.build.outputs.id }}
+          VERSION: ${{ needs.build.outputs.version }}
+          TAG: ${{ needs.build.outputs.tag }}
+        run: |
+          python3 - <<'PYTHON'
+          import hashlib, os, pathlib, re
+          pid, version, tag = (os.environ[k] for k in ('PLUGIN_ID', 'VERSION', 'TAG'))
+          assert re.fullmatch(r'[a-z0-9]+(?:[-_][a-z0-9]+)*(?:\.[a-z0-9]+(?:[-_][a-z0-9]+)*){2,}', pid), 'invalid plugin id'
+          assert re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version), 'invalid version'
+          assert tag == f'{pid}@{version}', 'tag mismatch'
+          name = f'{pid}-{version}.amplugin'
+          directory = pathlib.Path('dist')
+          assert {p.name for p in directory.iterdir()} == {name, name + '.sha256'}, 'unexpected assets'
+          digest = hashlib.sha256((directory / name).read_bytes()).hexdigest()
+          assert (directory / (name + '.sha256')).read_text() == f'{digest}  {name}\n', 'SHA-256 mismatch'
+          PYTHON
       - name: Publish the release
         env:
-          TAG: ${{ steps.plugin.outputs.tag }}
-          PLUGIN_ID: ${{ steps.plugin.outputs.id }}
-          VERSION: ${{ steps.plugin.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.build.outputs.tag }}
+          PLUGIN_ID: ${{ needs.build.outputs.id }}
+          VERSION: ${{ needs.build.outputs.version }}
         run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "::error::release $TAG already exists; bump the version in plugin.toml"
+            exit 1
+          fi
           sha=$(cut -d' ' -f1 "dist/$PLUGIN_ID-$VERSION.amplugin.sha256")
           printf '%s %s\n\nSHA-256: `%s`\n\nInstall from the Plugins tab in AniMathIO 2.2+ (Browse), or download the .amplugin into your user plugin folder. See the README for details.\n' \
             "$PLUGIN_ID" "$VERSION" "$sha" > notes.md
-          gh release create "$TAG" dist/*.amplugin dist/*.amplugin.sha256 \
+          gh release create "$TAG" "dist/$PLUGIN_ID-$VERSION.amplugin" "dist/$PLUGIN_ID-$VERSION.amplugin.sha256" \
             --target "$GITHUB_SHA" --title "$PLUGIN_ID $VERSION" --notes-file notes.md --latest=false
   index:
-    needs: release
+    needs: publish
     permissions:
       contents: write
     uses: ./.github/workflows/index.yml
