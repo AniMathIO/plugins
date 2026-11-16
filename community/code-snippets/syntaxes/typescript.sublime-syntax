@@ -1,0 +1,47 @@
+%YAML 1.2
+---
+name: typescript
+file_extensions: [ts]
+scope: source.ts
+contexts:
+  main:
+    - match: '//.*$'
+      scope: comment.line
+    - match: '/\*'
+      push:
+        - meta_scope: comment.block
+        - match: '\*/'
+          pop: true
+    - match: '"'
+      push:
+        - meta_scope: string.quoted
+        - match: '\\.'
+          scope: constant.character.escape
+        - match: '"'
+          pop: true
+    - match: ''''
+      push:
+        - meta_scope: string.quoted
+        - match: '\\.'
+          scope: constant.character.escape
+        - match: ''''
+          pop: true
+    - match: '`'
+      push:
+        - meta_scope: string.quoted
+        - match: '\\.'
+          scope: constant.character.escape
+        - match: '`'
+          pop: true
+    - match: '\b(?:abstract|any|as|asserts|declare|enum|implements|infer|interface|is|keyof|module|namespace|never|number|override|private|protected|public|readonly|satisfies|string|symbol|type|unknown|async|await|break|case|catch|class|const|continue|debugger|default|delete|do|else|export|extends|false|finally|for|from|function|get|if|import|in|instanceof|let|new|null|of|return|set|static|super|switch|this|throw|true|try|typeof|undefined|var|void|while|with|yield)\b'
+      scope: keyword.control
+    - match: '\b(?:0[xX][0-9a-fA-F_]+|[0-9][0-9_]*(?:\.[0-9_]+)?(?:[eE][+-]?[0-9]+)?)\b'
+      scope: constant.numeric
+    - match: '\b[A-Za-z_][A-Za-z0-9_]*(?=\s*\()'
+      scope: entity.name.function
+    - match: '[+*/%=!<>&|^~?:-]+'
+      scope: keyword.operator
+    - match: '[{}\[\]();,.]'
+      scope: punctuation.separator
+    - match: '\b[A-Z][A-Za-z0-9_]*\b'
+      scope: entity.name.type

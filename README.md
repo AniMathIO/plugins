@@ -52,5 +52,7 @@ The host provides bounded services; plugins have no direct network or filesystem
 | Name | Description | Source | License | CI | ABI |
 | --- | --- | --- | --- | --- | --- |
 
-No community entries yet. Submit a PR adding a row under the rules in
+| [Code Snippets](community/code-snippets) | Syntax-highlighted code with reveal and token morph animations | [Source](https://github.com/AniMathIO/plugins/tree/main/community/code-snippets) | MIT; font OFL-1.1 | [Plugins CI](https://github.com/AniMathIO/plugins/actions/workflows/ci.yml) | 1.1.0 |
+
+Submit a PR adding a row under the rules in
 [CONTRIBUTING.md](CONTRIBUTING.md). A listing is not an endorsement or security audit.
