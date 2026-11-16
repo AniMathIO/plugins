@@ -1,0 +1,14 @@
+[package]
+name = "circle"
+version = "1.0.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen = "=0.40.0"
+
+[workspace]

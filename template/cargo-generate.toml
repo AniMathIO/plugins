@@ -1,0 +1,21 @@
+[template]
+cargo_generate_version = ">=0.23.0"
+exclude = ["target", "cargo-generate.toml"]
+
+[placeholders.plugin-id]
+type = "string"
+prompt = "Reverse-domain plugin ID"
+default = "org.example.circle"
+regex = "^[a-zA-Z0-9]+[a-zA-Z0-9.-]*$"
+
+[placeholders.plugin-name]
+type = "string"
+prompt = "Display name"
+default = "Circle"
+regex = "^[a-zA-Z0-9 -]+$"
+
+[placeholders.author]
+type = "string"
+prompt = "Author"
+default = "Plugin author"
+regex = "^[a-zA-Z0-9 .@_-]+$"

@@ -1,0 +1,43 @@
+name: Plugins
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_BUILD_JOBS: 3
+      CARGO_PROFILE_DEV_DEBUG: 0
+      CARGO_INCREMENTAL: 0
+      ANIMATHIO_AUDIO: none
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Install toolchain and generator
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy --target wasm32-wasip2
+          rustup default stable
+          cargo install cargo-generate --version 0.26.0 --locked
+      - name: Generate template
+        run: mkdir -p .generated && cargo generate --path template --name generated-circle --destination .generated --silent --define plugin-id=org.example.generated-circle --define plugin-name=GeneratedCircle --define author=CI
+      - name: Build and package every plugin
+        run: |
+          mkdir -p target/plugins
+          for dir in .generated/generated-circle examples/*; do
+            cargo fmt --manifest-path "$dir/Cargo.toml" --check
+            cargo clippy --manifest-path "$dir/Cargo.toml" --target wasm32-wasip2 --locked -- -D warnings
+            bash "$dir/build.sh"
+            cp "$dir"/target/*.amplugin target/plugins/
+          done
+      - name: Test released host rendering
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download v2.0.0 --repo AniMathIO/AniMathIO --pattern '*amd64.deb' --dir .host
+          echo 'c5e4ff74fca524c1f6e9d4223e42df05e1d4cbd3d27c5ceb7bf372e69d4f1965  .host/animathio_2.0.0_amd64.deb' | sha256sum -c -
+          dpkg-deb -x .host/*.deb .host/extracted
+          python3 -m pip install Pillow
+          python3 scripts/smoke.py .host/extracted/usr/bin/animathio-cli target/plugins
