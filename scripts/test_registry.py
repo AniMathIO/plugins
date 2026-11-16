@@ -93,6 +93,13 @@ class ValidateTests(unittest.TestCase):
             d["plugins"].append(dict(EXTERNAL, id="org.animathio.evil"))
         self.check(mutate, "reserved")
 
+    def test_windows_device_ids_are_rejected(self):
+        for stem in ("con", "prn", "aux", "nul", "com1", "com9", "lpt1", "lpt9"):
+            with self.subTest(stem=stem):
+                self.check(lambda d: d["plugins"].append(dict(EXTERNAL, id=f"{stem}.example.plugin")),
+                           "Windows device names")
+        self.check(lambda d: d["plugins"].append(dict(EXTERNAL, id="com0.example.plugin")))
+
     def test_duplicate_id(self):
         self.check(lambda d: d["plugins"].append(dict(d["plugins"][0], name="Other")), "duplicate id")
 
@@ -166,7 +173,7 @@ class IndexTests(unittest.TestCase):
 
     def test_repository_identity_is_pinned(self):
         source = FakeSource({"v1.2.0": release("1.2.0")})
-        source.repo_id = 7  # renamed, transferred or re-created repository
+        source.repo_id = 7  # a different repository now occupies the configured name
         data = copy.deepcopy(REAL)
         data["plugins"] = [dict(EXTERNAL)]
         RegistryFile(self, data)

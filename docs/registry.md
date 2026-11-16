@@ -50,7 +50,7 @@ Schema in [`schemas/`](../schemas) (`community-plugins.schema.json`, `community-
 
 | Field | Rule |
 | --- | --- |
-| `id` | Reverse-domain, lowercase, at least three dot-separated labels, at most 100 characters. Unique. **Never `org.animathio.*`**: those ids are reserved for first-party plugins and the host refuses to load them from the user plugin folder. Must equal `id` in the plugin's `plugin.toml`. |
+| `id` | Reverse-domain, lowercase, at least three dot-separated labels, at most 100 characters. Unique. **Never `org.animathio.*`**: those ids are reserved for first-party plugins and the host refuses to load them from the user plugin folder. Windows device-name prefixes (`con`, `nul`, `com1`–`com9`, etc.) are refused, matching the host. Must equal `id` in the plugin's `plugin.toml`. |
 | `name`, `author`, `description` | Display text (60 / 80 / 10-200 characters). Names are unique (case-insensitive). |
 | `repo` | Public GitHub repository `owner/name` that carries the release assets. |
 | `repo_id` | Numeric GitHub id of `repo` (`gh api repos/<owner>/<name> --jq .id`). Required outside AniMathIO/plugins. The index builder refuses releases if the configured name resolves to a different numeric id, including deletion and re-creation or reuse of an old name. Renames and transfers preserve the numeric id; this pin does not detect ownership changes or require their re-review. |

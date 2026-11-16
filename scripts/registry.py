@@ -324,6 +324,8 @@ def validate(offline: bool, source=None) -> list[str]:
         if pid.lower().startswith(RESERVED_PREFIX):
             errors.append(f"{where} ids under {RESERVED_PREFIX}* are reserved for first-party plugins "
                           "(the host refuses to load them from the user plugin folder)")
+        if re.fullmatch(r"(?:con|prn|aux|nul|com[1-9]|lpt[1-9])", pid.split(".")[0]):
+            errors.append(f"{where} Windows device names cannot be installed by the host")
         if pid in delisted:
             errors.append(f"{where} was delisted; delisted ids cannot be listed again")
         lowered = entry["name"].casefold()
