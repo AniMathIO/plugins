@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/AniMathIO/plugins/main/schemas/community-plugins.schema.json",
+  "title": "AniMathIO community plugin registry",
+  "description": "Hand-edited list of community plugins (submitted by pull request). Nothing here changes per plugin version: versions, download URLs and checksums are resolved from GitHub releases into community-index.json.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "plugins"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schema_version": { "const": 1 },
+    "plugins": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/plugin" }
+    },
+    "delisted": {
+      "description": "Plugins removed from the registry. Their ids stay reserved and the editor tells users who installed them.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/delisted" }
+    }
+  },
+  "$defs": {
+    "id": {
+      "description": "Reverse-domain plugin id: lowercase, at least three dot-separated labels, never org.animathio.* (reserved for first-party plugins).",
+      "type": "string",
+      "maxLength": 100,
+      "pattern": "^[a-z0-9]+(?:[-_][a-z0-9]+)*(?:\\.[a-z0-9]+(?:[-_][a-z0-9]+)*){2,}$"
+    },
+    "abi": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "plugin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "author", "description", "repo", "license", "min_abi"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "author": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "description": { "type": "string", "minLength": 10, "maxLength": 200 },
+        "repo": {
+          "description": "GitHub repository (owner/name) whose releases carry the .amplugin files.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?/[A-Za-z0-9._-]+$"
+        },
+        "path": {
+          "description": "Subdirectory of repo that holds the plugin (plugin.toml, build.sh). Present for monorepos, including every plugin hosted in AniMathIO/plugins (community/<name>); when present, release tags must be <id>@<version>.",
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$",
+          "not": { "pattern": "(^|/)\\.\\.?(/|$)" }
+        },
+        "license": {
+          "description": "SPDX license expression, e.g. MIT, Apache-2.0 OR MIT, or MIT AND OFL-1.1 when a bundled font is OFL. Every identifier must be OSI-approved or an SIL OFL variant (schemas/osi-approved-licenses.txt).",
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120,
+          "pattern": "^[A-Za-z0-9.+() -]+$"
+        },
+        "min_abi": {
+          "description": "Plugin ABI (plugin.toml api_version) of the latest release: the minimum host ABI the plugin needs.",
+          "$ref": "#/$defs/abi"
+        }
+      }
+    },
+    "delisted": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "reason", "date"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "reason": { "type": "string", "minLength": 5, "maxLength": 300 },
+        "date": { "type": "string", "format": "date", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
+      }
+    }
+  }
+}

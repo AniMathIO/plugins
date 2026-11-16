@@ -2,7 +2,9 @@
 
 Animated, syntax-highlighted code for AniMathIO 2. ABI **1.1.0**, tested with the
 released **AniMathIO 2.1.0** Linux CLI. MIT; embedded JetBrains Mono is OFL 1.1.
-Plugin ID: `org.animathio.community.code-snippets`.
+Plugin ID: `io.github.animathio.code-snippets` (renamed before the first release from
+`org.animathio.community.code-snippets`: `org.animathio.*` ids are reserved for first-party
+plugins and the host does not load them from the user plugin folder).
 
 A behavioral port of [Shiki Magic Move](https://github.com/shikijs/shiki-magic-move/tree/v1.1.0)
 by Anthony Fu (**MIT**): retained tokens slide to their new positions while removed
