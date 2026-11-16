@@ -12,9 +12,9 @@ use animation::{matches, Token};
 use drawing::{color, Painter};
 
 const CODE: &str = "fn main() {\n    println!(\"Hello, AniMathIO!\");\n}";
-const MAX_BYTES: usize = 8192;
-const MAX_CHARS: usize = 2048;
-const MAX_TOKENS: usize = 512;
+const MAX_BYTES: usize = 4096;
+const MAX_CHARS: usize = 1024;
+const MAX_TOKENS: usize = 256;
 const MAX_LINES: usize = 80;
 struct CodeSnippets;
 
@@ -117,7 +117,7 @@ fn validate(code: &str) -> Result<String, Diagnostic> {
         || code.split('\n').count() > MAX_LINES
     {
         return Err(error(
-            "Code exceeds 8192 bytes, 2048 characters or 80 lines",
+            "Code exceeds 4096 bytes, 1024 characters or 80 lines",
         ));
     }
     // Tabs use four-column tab stops. CRLF has the same layout as LF.
@@ -142,7 +142,7 @@ fn validate(code: &str) -> Result<String, Diagnostic> {
         }
     }
     if result.chars().count() > MAX_CHARS {
-        return Err(error("Expanded tabs exceed 2048 characters"));
+        return Err(error("Expanded tabs exceed 1024 characters"));
     }
     Ok(result)
 }
@@ -219,7 +219,7 @@ fn tokenize(
         }
     }
     if tokens.len() > MAX_TOKENS {
-        return Err(error("Code exceeds 512 syntax tokens"));
+        return Err(error("Code exceeds 256 syntax tokens"));
     }
     Ok(tokens)
 }
@@ -431,6 +431,7 @@ fn render(params: &[ParamEntry], size: Size) -> Result<Scene, Diagnostic> {
             );
         }
     } else if morph {
+        let (travel, leave, enter) = animation::phases(progress);
         let pairs = matches(&old, &new);
         let mut used = vec![false; new.len()];
         for (i, token) in old.iter().enumerate() {
@@ -439,10 +440,10 @@ fn render(params: &[ParamEntry], size: Size) -> Result<Scene, Diagnostic> {
                 let to = &new[j];
                 painter.text(
                     &token.text,
-                    token.column + (to.column - token.column) * progress,
-                    token.line + (to.line - token.line) * progress,
-                    drawing::blend(token.color, to.color, progress),
-                    dim(token.line) + (dim(to.line) - dim(token.line)) * progress,
+                    token.column + (to.column - token.column) * travel,
+                    token.line + (to.line - token.line) * travel,
+                    drawing::blend(token.color, to.color, travel),
+                    dim(token.line) + (dim(to.line) - dim(token.line)) * travel,
                 );
             } else {
                 painter.text(
@@ -450,18 +451,17 @@ fn render(params: &[ParamEntry], size: Size) -> Result<Scene, Diagnostic> {
                     token.column,
                     token.line,
                     token.color,
-                    (1.0 - progress) * dim(token.line),
+                    leave * dim(token.line),
                 );
             }
         }
-        for (i, token) in new.iter().enumerate().filter(|(i, _)| !used[*i]) {
-            let _ = i;
+        for (_, token) in new.iter().enumerate().filter(|(i, _)| !used[*i]) {
             painter.text(
                 &token.text,
                 token.column,
                 token.line,
                 token.color,
-                progress * dim(token.line),
+                enter * dim(token.line),
             );
         }
     } else {

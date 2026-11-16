@@ -55,7 +55,7 @@ TARGET = '''fn fibonacci(n: u32) -> u64 {
 
 def render(name, frame=0, **params):
     clip['kind'] = {'Plugin': {'plugin_id': 'org.animathio.community.code-snippets',
-                             'params': dict(code=CODE, code_to=TARGET, font_size=4.0, **params)}}
+                             'params': dict(dict(code=CODE, code_to=TARGET, font_size=4.0), **params)}}
     file = WORK / (name + '.amio')
     with zipfile.ZipFile(file, 'w', zipfile.ZIP_DEFLATED) as z:
         z.writestr('project.json', json.dumps(project))
@@ -65,7 +65,10 @@ def render(name, frame=0, **params):
     image = Image.open(io.BytesIO(png.read_bytes())).convert('RGB')
     # A placeholder or blank canvas must not pass as a successful render.
     colors = dict((rgb, count) for count, rgb in image.getcolors(image.width * image.height))
-    assert colors.get((43, 48, 59), 0) > 1000 if params.get('theme', 'ocean') == 'ocean' and params.get('background', True) else len(colors) > 20, name
+    if params.get('theme', 'ocean') == 'ocean' and params.get('background', True):
+        assert colors.get((43, 48, 59), 0) > 1000, name
+    else:
+        assert any(max(rgb) - min(rgb) > 30 for rgb in colors), name
     print('PASS', name)
     return image
 
@@ -78,8 +81,20 @@ for mode in ['reveal', 'morph']:
     assert frames[f'{mode}-050'].tobytes() != frames[f'{mode}-100'].tobytes()
 assert frames['reveal-100'].tobytes() == frames['morph-000'].tobytes()
 assert frames['morph-050'].tobytes() == render('repeat', mode='morph', progress=0.5).tobytes()
-for language in ['python','javascript','typescript','c','cpp','json','latex','tex','bash']:
-    render('language-' + language, language=language, progress=1)
+samples = {
+    'python': 'def greet(name):\n    # a comment\n    return f"Hello {name}"',
+    'javascript': 'const greet = (name) => "Hello " + name;',
+    'typescript': 'interface User { name: string; }\nconst user: User = { name: "Ada" };',
+    'c': 'int main(void) { /* comment */ return 42; }',
+    'cpp': 'template<typename T> T square(T x) { return x * x; }',
+    'c++': 'const auto answer = 42;',
+    'json': '{"name": "Ada", "active": true, "count": 42}',
+    'latex': r"\frac{a}{b} + \sqrt{2} % comment",
+    'tex': r"\begin{equation} e^{i\pi} + 1 = 0 \end{equation}",
+    'bash': '#!/bin/bash\nfor name in Ada Bob; do\n    echo "$name"\ndone',
+}
+for language, code in samples.items():
+    render('language-' + language.replace('+', 'plus'), language=language, code=code, progress=1)
 render('paper-lines', theme='paper', highlight_lines='2,4-6', reveal_by='line', progress=0.5)
 render('night-transparent', theme='night', background=False, line_numbers=False)
 # Verify the target endpoint against a static rendering with the same box dimensions.
@@ -93,6 +108,8 @@ clip['animations'] = [{'target': {'Param': 'progress'}, 'keys': {
     '705600000': {'value': {'Number': 1.0}, 'interpolation': 'Hold'}}}]
 assert frames['morph-050'].tobytes() == render('keyframed', frame=15, mode='morph', progress=0).tobytes()
 clip['animations'] = []
+render('bounded-lcs', code=('x;' * 16 + '\n') * 8, code_to=('y;' * 16 + '\n') * 8, mode='morph', progress=0.5)
+render('long-comment', code=('// ' + 'a' * 60 + '\n') * 16, progress=1)
 if '--screenshots' in sys.argv:
     out = ROOT / 'screenshots'
     out.mkdir(exist_ok=True)

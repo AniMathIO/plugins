@@ -21,6 +21,7 @@ pub fn blend(a: Color, b: Color, t: f32) -> Color {
 pub struct Painter<'a> {
     pub elements: Vec<DrawCommand>,
     font: Face<'a>,
+    glyphs: std::collections::BTreeMap<char, Vec<PathVerb>>,
     scale: f32,
     advance: f32,
     line_height: f32,
@@ -59,6 +60,7 @@ impl Painter<'static> {
         Self {
             elements: vec![],
             font,
+            glyphs: std::collections::BTreeMap::new(),
             scale,
             advance,
             line_height: font_size * fit * 1.5,
@@ -104,21 +106,44 @@ impl Painter<'static> {
             return;
         }
         for (index, c) in text.chars().enumerate() {
-            let glyph = self
-                .font
-                .glyph_index(c)
-                .or_else(|| self.font.glyph_index('\u{fffd}'))
-                .unwrap();
-            let mut outline = Outline {
-                path: vec![],
-                scale: self.scale,
-                x: self.x + (column + index as f32) * self.advance,
-                y: self.y + line * self.line_height,
+            let font = &self.font;
+            let scale = self.scale;
+            let path = self.glyphs.entry(c).or_insert_with(|| {
+                let glyph = font
+                    .glyph_index(c)
+                    .or_else(|| font.glyph_index('\u{fffd}'))
+                    .or_else(|| font.glyph_index('?'))
+                    .expect("embedded fallback glyph");
+                let mut outline = Outline {
+                    path: vec![],
+                    scale,
+                    x: 0.0,
+                    y: 0.0,
+                };
+                font.outline_glyph(glyph, &mut outline);
+                outline.path
+            });
+            let x = self.x + (column + index as f32) * self.advance;
+            let y = self.y + line * self.line_height;
+            let point = |p: &Point| Point {
+                x: p.x + x,
+                y: p.y + y,
             };
-            self.font.outline_glyph(glyph, &mut outline);
-            if !outline.path.is_empty() {
+            let translated = path
+                .iter()
+                .map(|v| match v {
+                    PathVerb::MoveTo(p) => PathVerb::MoveTo(point(p)),
+                    PathVerb::LineTo(p) => PathVerb::LineTo(point(p)),
+                    PathVerb::QuadTo((a, b)) => PathVerb::QuadTo((point(a), point(b))),
+                    PathVerb::CubicTo((a, b, c)) => {
+                        PathVerb::CubicTo((point(a), point(b), point(c)))
+                    }
+                    PathVerb::Close => PathVerb::Close,
+                })
+                .collect::<Vec<_>>();
+            if !translated.is_empty() {
                 self.elements
-                    .push(DrawCommand::FillPath((outline.path, color)));
+                    .push(DrawCommand::FillPath((translated, color)));
             }
         }
     }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render every source, then verify invert changes a frame and is self-inverse."""
+"""Render the circle examples, then verify invert changes a frame and is self-inverse."""
 import io
 from PIL import Image
 import json

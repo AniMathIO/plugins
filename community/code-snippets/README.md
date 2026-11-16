@@ -6,7 +6,8 @@ Plugin ID: `org.animathio.community.code-snippets`.
 
 A behavioral port of [Shiki Magic Move](https://github.com/shikijs/shiki-magic-move/tree/v1.1.0)
 by Anthony Fu (**MIT**): retained tokens slide to their new positions while removed
-and added tokens fade. We studied its token key synchronization and enter/leave/move
+and added tokens fade. Exits fade during 0–30% progress, retained tokens move
+during 20–80%, and entries fade during 70–100% to reduce overlapping edits. We studied its token key synchronization and enter/leave/move
 renderer, then implemented bounded token LCS and vector drawing in Rust. No upstream
 animation code is copied. See [NOTICE](NOTICE) and its retained MIT license.
 
@@ -94,9 +95,9 @@ JS template interpolation, shell heredocs and embedded TeX languages are not par
 Layout uses one cell per Unicode scalar (no ligatures, grapheme shaping, bidi or
 wide-character cells). Missing font glyphs use a replacement glyph.
 
-Each snippet is capped at 8192 UTF-8 bytes, 2048 Unicode scalar values after tab
-expansion, 80 lines and 512 highlighted tokens. The `highlight_lines` string is at
-most 512 bytes, with ranges in 1–80. Token LCS uses at most 513² `u16` cells;
+Each snippet is capped at 4096 UTF-8 bytes, 1024 Unicode scalar values after tab
+expansion, 80 lines and 256 highlighted tokens. The `highlight_lines` string is at
+most 512 bytes, with ranges in 1–80. Token LCS uses at most 257² `u16` cells;
 subsequent moved-identifier matching is one-to-one and deterministic. Duplicate
 matches resolve in source order. All output is recomputed from parameters; calls
 and seek order do not affect it. These bounds protect memory/CPU; the host retains
@@ -105,6 +106,9 @@ rejected by the sandbox. Full editor integration, semantic parsing, arbitrary fo
 custom themes, selection rectangles and multi-step transitions are deferred.
 
 ## Verification
+
+Verified bundle size: **794,661 bytes (776 KiB)**; the uncompressed component is
+2,395,050 bytes. The bundle includes the component, manifest and license notices.
 
 ```sh
 # Apply the shared machine resource limits to every cargo invocation.
@@ -118,6 +122,7 @@ The smoke script creates `.amio` fixtures under `target/smoke`, renders both mod
 at 0/50/100%, checks exact endpoints with equal layout extents, repeatability,
 all language choices, both dark themes, the light theme, line selection, no-panel
 rendering and a host-sampled typed `progress` keyframe at 0.5 seconds. It checks
-panel pixels to reject error placeholders. `--screenshots` refreshes README PNGs;
+panel pixels to reject error placeholders and exercises a 256-token-per-side LCS
+and a 1,024-character comment under the default sandbox limits. `--screenshots` refreshes README PNGs;
 look at them before committing. CI also builds for `wasm32-wasip2` and runs these
 checks against the released 2.1.0 CLI. No desktop window or audio device is opened.

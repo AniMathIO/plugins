@@ -167,3 +167,15 @@ fn line_reveal_keeps_glyph_counters_and_layout() {
         panic!("expected glyph path");
     }
 }
+
+#[test]
+fn morph_phases_separate_entering_and_leaving_tokens() {
+    assert_eq!(animation::phases(0.), (0., 1., 0.));
+    assert_eq!(animation::phases(0.5), (0.5, 0., 0.));
+    let (travel, leave, enter) = animation::phases(1.);
+    assert_eq!((travel, leave, enter), (1., 0., 1.));
+    let _ = snapshot(&params(&[(
+        "code",
+        ParamValue::String("你好 🙂 e\u{301}".into()),
+    )]));
+}

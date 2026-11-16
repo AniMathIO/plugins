@@ -9,13 +9,30 @@ pub struct Token {
 }
 
 /// Bounded token LCS, with stable tie-breaking for repeated punctuation.
-/// At most 513² u16 cells (inputs are capped at 512 tokens before this call).
+/// At most 257² u16 cells (inputs are capped at 256 tokens before this call).
 pub fn matches(from: &[Token], to: &[Token]) -> Vec<Option<usize>> {
+    // Intern text once so the quadratic loop compares integers, not UTF-8 strings.
+    let mut vocabulary = std::collections::BTreeMap::new();
+    let mut next_id = 0u16;
+    let mut ids = |tokens: &[Token]| {
+        tokens
+            .iter()
+            .map(|t| {
+                *vocabulary.entry(t.text.clone()).or_insert_with(|| {
+                    let id = next_id;
+                    next_id += 1;
+                    id
+                })
+            })
+            .collect::<Vec<_>>()
+    };
+    let from_ids = ids(from);
+    let to_ids = ids(to);
     let width = to.len() + 1;
     let mut lengths = vec![0u16; (from.len() + 1) * width];
     for i in (0..from.len()).rev() {
         for j in (0..to.len()).rev() {
-            lengths[i * width + j] = if from[i].text == to[j].text {
+            lengths[i * width + j] = if from_ids[i] == to_ids[j] {
                 lengths[(i + 1) * width + j + 1] + 1
             } else {
                 lengths[(i + 1) * width + j].max(lengths[i * width + j + 1])
@@ -25,7 +42,7 @@ pub fn matches(from: &[Token], to: &[Token]) -> Vec<Option<usize>> {
     let mut result = vec![None; from.len()];
     let (mut i, mut j) = (0, 0);
     while i < from.len() && j < to.len() {
-        if from[i].text == to[j].text {
+        if from_ids[i] == to_ids[j] {
             result[i] = Some(j);
             i += 1;
             j += 1;
@@ -56,4 +73,13 @@ pub fn matches(from: &[Token], to: &[Token]) -> Vec<Option<usize>> {
         }
     }
     result
+}
+
+/// Stage exits before entries, like Magic Move, to avoid two opaque edits colliding.
+pub fn phases(progress: f32) -> (f32, f32, f32) {
+    (
+        ((progress - 0.2) / 0.6).clamp(0.0, 1.0),
+        (1.0 - progress / 0.3).clamp(0.0, 1.0),
+        ((progress - 0.7) / 0.3).clamp(0.0, 1.0),
+    )
 }
