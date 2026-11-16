@@ -74,7 +74,7 @@ def render(name, frame=0, **params):
 
 frames = {}
 for mode in ['reveal', 'morph']:
-    for p in [0, 0.5, 1]:
+    for p in [0, 0.25, 0.5, 0.75, 1]:
         name = f'{mode}-{int(p * 100):03}'
         frames[name] = render(name, mode=mode, progress=p)
     assert frames[f'{mode}-000'].tobytes() != frames[f'{mode}-050'].tobytes()
@@ -114,7 +114,7 @@ if '--screenshots' in sys.argv:
     out = ROOT / 'screenshots'
     out.mkdir(exist_ok=True)
     for mode in ['reveal','morph']:
-        for p in [0,50,100]:
+        for p in [0,25,50,75,100]:
             name = f'{mode}-{p:03}'
             frames[name].save(out / f'{name}.png', optimize=True)
 print('All released-host checks passed')

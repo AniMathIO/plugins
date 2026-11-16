@@ -6,8 +6,12 @@ Plugin ID: `org.animathio.community.code-snippets`.
 
 A behavioral port of [Shiki Magic Move](https://github.com/shikijs/shiki-magic-move/tree/v1.1.0)
 by Anthony Fu (**MIT**): retained tokens slide to their new positions while removed
-and added tokens fade. Exits fade during 0–30% progress, retained tokens move
-during 20–80%, and entries fade during 70–100% to reduce overlapping edits. We studied its token key synchronization and enter/leave/move
+and added tokens fade. Exits fade during 0–60% progress, retained tokens move with smooth ease-in-out
+during 15–85%, and entries fade during 40–100%, keeping both edits visible at midpoint.
+Upstream 1.1.0 defaults to a 500 ms duration, zero stagger, CSS `ease`, and
+leave/move/enter delays of 0.1/0.3/0.7 times the duration; each phase runs for
+the full duration, so they overlap. Our normalized windows preserve that overlap
+within the host’s 0–1 progress range. We studied its token key synchronization and enter/leave/move
 renderer, then implemented bounded token LCS and vector drawing in Rust. No upstream
 animation code is copied. See [NOTICE](NOTICE) and its retained MIT license.
 
@@ -65,15 +69,15 @@ reveal. Tabs expand to four-column stops and CRLF normalizes to LF.
 ## Screenshots
 
 Rendered headlessly by the released CLI, with no GUI or audio. Each row shows
-`progress=0`, `0.5`, `1`.
+`progress=0`, `0.25`, `0.5`, `0.75`, `1`.
 
-| Reveal 0% | Reveal 50% | Reveal 100% |
-| --- | --- | --- |
-| ![Reveal start](screenshots/reveal-000.png) | ![Reveal midpoint](screenshots/reveal-050.png) | ![Reveal complete](screenshots/reveal-100.png) |
+| Reveal 0% | Reveal 25% | Reveal 50% | Reveal 75% | Reveal 100% |
+| --- | --- | --- | --- | --- |
+| ![Reveal start](screenshots/reveal-000.png) | ![Reveal quarter](screenshots/reveal-025.png) | ![Reveal midpoint](screenshots/reveal-050.png) | ![Reveal three quarters](screenshots/reveal-075.png) | ![Reveal complete](screenshots/reveal-100.png) |
 
-| Morph 0% | Morph 50% | Morph 100% |
-| --- | --- | --- |
-| ![Recursive source](screenshots/morph-000.png) | ![Tokens moving](screenshots/morph-050.png) | ![Iterative target](screenshots/morph-100.png) |
+| Morph 0% | Morph 25% | Morph 50% | Morph 75% | Morph 100% |
+| --- | --- | --- | --- | --- |
+| ![Recursive source](screenshots/morph-000.png) | ![Tokens departing](screenshots/morph-025.png) | ![Tokens moving](screenshots/morph-050.png) | ![Tokens arriving](screenshots/morph-075.png) | ![Iterative target](screenshots/morph-100.png) |
 
 ## Implementation and limits
 
@@ -98,7 +102,7 @@ wide-character cells). Missing font glyphs use a replacement glyph.
 Each snippet is capped at 4096 UTF-8 bytes, 1024 Unicode scalar values after tab
 expansion, 80 lines and 256 highlighted tokens. The `highlight_lines` string is at
 most 512 bytes, with ranges in 1–80. Token LCS uses at most 257² `u16` cells;
-subsequent moved-identifier matching is one-to-one and deterministic. Duplicate
+subsequent moved-token matching is one-to-one and deterministic. Duplicate
 matches resolve in source order. All output is recomputed from parameters; calls
 and seek order do not affect it. These bounds protect memory/CPU; the host retains
 its independent fuel, memory and epoch backstops. Pathological code can still be
@@ -107,8 +111,8 @@ custom themes, selection rectangles and multi-step transitions are deferred.
 
 ## Verification
 
-Verified bundle size: **794,661 bytes (776 KiB)**; the uncompressed component is
-2,395,050 bytes. The bundle includes the component, manifest and license notices.
+Verified bundle size: **795,124 bytes (777 KiB)**; the uncompressed component is
+2,396,212 bytes. The bundle includes the component, manifest and license notices.
 
 ```sh
 # Apply the shared machine resource limits to every cargo invocation.
@@ -119,7 +123,7 @@ python3 community/code-snippets/smoke.py /path/to/animathio-cli target/plugins -
 ```
 
 The smoke script creates `.amio` fixtures under `target/smoke`, renders both modes
-at 0/50/100%, checks exact endpoints with equal layout extents, repeatability,
+at 0/25/50/75/100%, checks exact endpoints with equal layout extents, repeatability,
 all language choices, both dark themes, the light theme, line selection, no-panel
 rendering and a host-sampled typed `progress` keyframe at 0.5 seconds. It checks
 panel pixels to reject error placeholders and exercises a 256-token-per-side LCS

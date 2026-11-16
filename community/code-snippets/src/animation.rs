@@ -52,16 +52,13 @@ pub fn matches(from: &[Token], to: &[Token]) -> Vec<Option<usize>> {
             j += 1;
         }
     }
-    // Preserve moved identifiers outside the LCS, one-to-one, in source order.
+    // Preserve all moved tokens outside the LCS, one-to-one, in source order.
     let mut used = vec![false; to.len()];
     for j in result.iter().flatten() {
         used[*j] = true;
     }
     for (i, token) in from.iter().enumerate() {
-        if result[i].is_none()
-            && token.text.chars().count() >= 3
-            && token.text.chars().all(|c| c.is_alphanumeric() || c == '_')
-        {
+        if result[i].is_none() {
             if let Some(j) = to
                 .iter()
                 .enumerate()
@@ -75,11 +72,14 @@ pub fn matches(from: &[Token], to: &[Token]) -> Vec<Option<usize>> {
     result
 }
 
-/// Stage exits before entries, like Magic Move, to avoid two opaque edits colliding.
+/// Overlap exits and entries while retained tokens ease between positions.
+/// Like Magic Move's duration-based delays, these are overlapping windows,
+/// not three sequential slices. Progress is normalized to the whole transition.
 pub fn phases(progress: f32) -> (f32, f32, f32) {
+    let travel = ((progress - 0.15) / 0.7).clamp(0.0, 1.0);
     (
-        ((progress - 0.2) / 0.6).clamp(0.0, 1.0),
-        (1.0 - progress / 0.3).clamp(0.0, 1.0),
-        ((progress - 0.7) / 0.3).clamp(0.0, 1.0),
+        travel * travel * (3.0 - 2.0 * travel),
+        (1.0 - progress / 0.6).clamp(0.0, 1.0),
+        ((progress - 0.4) / 0.6).clamp(0.0, 1.0),
     )
 }

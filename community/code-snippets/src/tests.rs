@@ -169,13 +169,80 @@ fn line_reveal_keeps_glyph_counters_and_layout() {
 }
 
 #[test]
-fn morph_phases_separate_entering_and_leaving_tokens() {
+fn morph_phases_overlap_entering_and_leaving_tokens() {
     assert_eq!(animation::phases(0.), (0., 1., 0.));
-    assert_eq!(animation::phases(0.5), (0.5, 0., 0.));
+    let (travel, leave, enter) = animation::phases(0.5);
+    assert!((travel - 0.5).abs() < 1e-6);
+    assert!(leave > 0.16 && enter > 0.16);
     let (travel, leave, enter) = animation::phases(1.);
     assert_eq!((travel, leave, enter), (1., 0., 1.));
     let _ = snapshot(&params(&[(
         "code",
         ParamValue::String("你好 🙂 e\u{301}".into()),
     )]));
+}
+
+#[test]
+fn rust_keywords_have_theme_colors() {
+    let ss = syntax_set();
+    let themes = ThemeSet::load_defaults();
+    let theme = &themes.themes["base16-ocean.dark"];
+    let tokens = tokenize(
+        "fn fibonacci(n: u32) {\n    let (mut a, mut b) = (0, 1);\n    for _ in 0..n {}\n}",
+        "rust",
+        &ss,
+        theme,
+    )
+    .unwrap();
+    for keyword in ["fn", "let", "mut", "for", "in"] {
+        let token = tokens.iter().find(|t| t.text == keyword).unwrap();
+        assert_ne!(
+            format!("{:?}", token.color),
+            format!("{:?}", color(theme.settings.foreground.unwrap())),
+            "{keyword}"
+        );
+    }
+}
+
+#[test]
+fn typical_morph_keeps_tokens_visible_and_matches_short_tokens() {
+    let ss = syntax_set();
+    let themes = ThemeSet::load_defaults();
+    let token = |s| tokenize(s, "rust", &ss, &themes.themes["base16-ocean.dark"]).unwrap();
+    let from = token("fn fibonacci(n: u32) { let a = 0; let b = 1; match n { 0 => a, _ => b } }");
+    let to = token("fn fibonacci(n: u32) { for n in 0..1 { let b = n; let a = b; } }");
+    let pairs = matches(&from, &to);
+    let mut used = vec![false; to.len()];
+    for j in pairs.iter().flatten() {
+        used[*j] = true;
+    }
+    for text in ["fibonacci", "n", "{", "}", "0", "1", "a", "b"] {
+        let count = from
+            .iter()
+            .filter(|t| t.text == text)
+            .count()
+            .min(to.iter().filter(|t| t.text == text).count());
+        assert!(count > 0);
+        assert_eq!(
+            pairs
+                .iter()
+                .enumerate()
+                .filter(|(i, j)| from[*i].text == text && j.is_some())
+                .count(),
+            count,
+            "{text}"
+        );
+    }
+    let (_, leave, enter) = animation::phases(0.5);
+    let alpha: f32 = pairs
+        .iter()
+        .map(|j| if j.is_some() { 1.0 } else { leave })
+        .sum::<f32>()
+        + used.iter().filter(|v| !**v).count() as f32 * enter;
+    assert!(alpha > from.len().max(to.len()) as f32 * 0.4);
+    // Even a complete replacement must have both snippets visible at midpoint.
+    let old = token("return old_value");
+    let new = token("let fresh = 42");
+    assert!(matches(&old, &new).iter().all(Option::is_none));
+    assert!(old.len() as f32 * leave + new.len() as f32 * enter > 0.9);
 }
