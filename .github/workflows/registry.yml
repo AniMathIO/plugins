@@ -32,7 +32,6 @@ jobs:
       CARGO_PROFILE_DEV_DEBUG: 0
       CARGO_INCREMENTAL: 0
       ANIMATHIO_AUDIO: none
-      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -47,10 +46,14 @@ jobs:
         run: python3 -m unittest discover -s scripts -v
       - name: Validate community-plugins.json
         # Schema, unique and unreserved ids, public repositories, OSI/OFL licenses, README table.
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: python3 scripts/registry.py validate
       - name: Resolve releases into an index
         # External plugins need a published release (asset + .sha256); plugins hosted here are
         # released after merge, so they are built below instead.
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: python3 scripts/registry.py index --strict --allow-unreleased-hosted --previous /dev/null --output "$RUNNER_TEMP/index.json"
       - name: Released AniMathIO CLI
         id: cli
@@ -63,8 +66,9 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git show "origin/$BASE_REF:community-plugins.json" > "$RUNNER_TEMP/base.json" 2>/dev/null || echo '{"plugins":[]}' > "$RUNNER_TEMP/base.json"
-            scope=(--base "$RUNNER_TEMP/base.json")
+            scope=(--base "$RUNNER_TEMP/base.json" --build-external)
           else
             scope=(--all)
           fi
+          # Third-party build scripts may run above: no token is passed to this step.
           python3 scripts/check_submission.py "${{ steps.cli.outputs.cli }}" "$RUNNER_TEMP/index.json" "$RUNNER_TEMP/work" "${scope[@]}"

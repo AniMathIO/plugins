@@ -261,6 +261,11 @@ def resolve_release(entry: dict, source) -> dict:
     if not candidates:
         raise RegistryError(f"{entry['id']}: no published release of {entry['repo']} is tagged "
                             f"{entry['id']}@<version>" + ("" if "path" in entry else ", v<version> or <version>"))
+    if "repo_id" in entry:  # the repository must still be the one that was reviewed
+        current = source.api(f"/repos/{entry['repo']}").get("id")
+        if current != entry["repo_id"]:
+            raise RegistryError(f"{entry['id']}: {entry['repo']} now has GitHub id {current}, the registry pins "
+                                f"{entry['repo_id']} (renamed or transferred repository: a maintainer must re-review)")
     _, version, release = max(candidates, key=lambda c: c[0])
     stem = f"{entry['id']}-{version}.amplugin"
     assets = {a["name"]: a for a in release.get("assets", [])}
@@ -334,6 +339,9 @@ def validate(offline: bool, source=None) -> list[str]:
         hosted = entry["repo"] == HOSTED_REPO
         if hosted and "path" not in entry:
             errors.append(f"{where} plugins hosted in {HOSTED_REPO} need a path (community/<name>)")
+        if not hosted and "repo_id" not in entry:
+            errors.append(f"{where} plugins outside {HOSTED_REPO} need repo_id "
+                          f"(`gh api repos/{entry['repo']} --jq .id`)")
         if hosted and "path" in entry:
             plugin_dir = ROOT / entry["path"]
             if not entry["path"].startswith("community/"):
@@ -365,6 +373,8 @@ def validate(offline: bool, source=None) -> list[str]:
             errors.append(f"{where} {entry['repo']} is not public")
         if repo.get("archived") or repo.get("disabled"):
             errors.append(f"{where} {entry['repo']} is archived or disabled")
+        if not hosted and "repo_id" in entry and repo.get("id") != entry["repo_id"]:
+            errors.append(f"{where} {entry['repo']} has GitHub id {repo.get('id')}, repo_id says {entry['repo_id']}")
         if not hosted:
             detected = (repo.get("license") or {}).get("spdx_id")
             if detected in (None, "NOASSERTION"):

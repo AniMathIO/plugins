@@ -46,11 +46,14 @@ Schema in [`schemas/`](../schemas) (`community-plugins.schema.json`, `community-
 }
 ```
 
+(An entry for a plugin in another repository also has `"repo_id": 123456789`.)
+
 | Field | Rule |
 | --- | --- |
 | `id` | Reverse-domain, lowercase, at least three dot-separated labels, at most 100 characters. Unique. **Never `org.animathio.*`**: those ids are reserved for first-party plugins and the host refuses to load them from the user plugin folder. Must equal `id` in the plugin's `plugin.toml`. |
 | `name`, `author`, `description` | Display text (60 / 80 / 10-200 characters). Names are unique (case-insensitive). |
 | `repo` | Public GitHub repository `owner/name` that carries the release assets. |
+| `repo_id` | Numeric GitHub id of `repo` (`gh api repos/<owner>/<name> --jq .id`). Required outside AniMathIO/plugins. A repository that is renamed, deleted and re-created, or transferred, gets a different id (or the old name points at someone else), and the index builder then refuses its releases until a maintainer re-reviews the entry. |
 | `path` | Optional subdirectory of `repo` that holds the plugin (`plugin.toml`, `build.sh`). Required for plugins hosted here (`community/<name>`). A plugin with a `path` is a monorepo plugin: its release tags must be `<id>@<version>`. |
 | `license` | SPDX expression, e.g. `MIT`, `Apache-2.0 OR MIT`, `MIT AND OFL-1.1`. Every identifier must be OSI-approved or an SIL OFL variant ([`schemas/osi-approved-licenses.txt`](../schemas/osi-approved-licenses.txt)). For plugins outside this repository, the licence GitHub detects in the repository must be one of the declared identifiers. |
 | `min_abi` | The plugin ABI (`api_version` in `plugin.toml`) of the latest release. The index builder refuses a release whose manifest says otherwise, so raising the ABI is a one-line PR together with the release. |
@@ -152,6 +155,24 @@ latest release cannot be verified (missing asset, checksum or manifest mismatch,
 release), that plugin is **left out** and the run reports a warning, the other plugins still
 update. If GitHub itself is unreachable or rate limiting, the previous entries are kept.
 Pull requests that touch the registry run the same resolution strictly.
+
+## Trust model
+
+* A listing is reviewed once, by pull request; **new versions of a listed external plugin are
+  indexed automatically** (no PR per release), because the issue's design is that the user
+  installs and updates each plugin explicitly. Nothing is installed or updated without the
+  user's click, downloads are checked against the index SHA-256, and plugins run sandboxed.
+* The registry pins the repository identity (`repo_id`) and the index builder verifies the
+  release asset against its `.sha256`, the archive manifest against the registry id and `min_abi`,
+  and refuses `org.animathio.*`. A maintainer can delist at any time; to stop one version only,
+  delete that release (the previous release becomes latest).
+* Submission CI runs a plugin's own `build.sh` from its repository **only for pull requests that
+  add or change that entry**, in a step that gets no token or secrets (the workflow has
+  read-only permissions; GitHub withholds secrets from fork PRs). It checks that the source builds and
+  produces the same id, version and ABI as the release; it does not require byte-identical
+  output (zip timestamps and toolchains differ), so the release asset, not the source, is what
+  the editor installs and what the smoke test renders. Pushes to `main` and manual runs download and
+  render released assets but never build third-party source.
 
 ## Submitting, releasing, delisting
 

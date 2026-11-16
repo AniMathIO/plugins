@@ -2,13 +2,16 @@
 """Build and smoke-test registry entries (submission CI).
 
 Usage: python3 scripts/check_submission.py CLI INDEX_JSON WORK_DIR [--base community-plugins.json | --all]
+                                            [--build-external]
 
 Targets are the entries that differ from --base (a previous copy of community-plugins.json;
 new entries and changed fields count) or every entry with --all. For each target:
   * hosted in AniMathIO/plugins: build it with its build.sh and package it like a release;
   * elsewhere: download the release asset the index points at (already SHA-256 checked by
-    `registry.py index`), clone the repository at that release tag and build it with its
-    build.sh; the built package must carry the same id, version and ABI as the release.
+    `registry.py index`); with --build-external also clone the repository at that release tag
+    and build it with its build.sh (third-party code runs: only for pull requests that add or
+    change the entry, in a step without credentials). The built package must carry the same id,
+    version and ABI as the release.
 Then every collected .amplugin is loaded and rendered with the released CLI.
 """
 import json
@@ -37,6 +40,7 @@ def main() -> int:
     if "--all" not in argv and base is None:
         print("pass --base FILE or --all", file=sys.stderr)
         return 2
+    build_external = "--build-external" in argv
     index = {p["id"]: p for p in json.loads(index_file.read_text())["plugins"]}
     chosen = targets(registry.load_json(registry.REGISTRY), None if "--all" in argv else base)
     shutil.rmtree(work, ignore_errors=True)
@@ -59,6 +63,9 @@ def main() -> int:
             if registry.sha256_hex(data) != released["sha256"]:
                 raise registry.RegistryError("download does not match the index checksum")
             (plugins / asset["name"]).write_bytes(data)
+            if not build_external:
+                print("source build skipped (it runs for pull requests that add or change an entry)")
+                continue
             tag = re.search(r"/releases/download/([^/]+)/", released["download_url"]).group(1)
             src = work / "src" / pid
             subprocess.run(["git", "clone", "--quiet", "--depth", "1", "--branch", tag,

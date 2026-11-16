@@ -15,7 +15,7 @@ import registry  # noqa: E402
 
 REAL = json.loads(registry.REGISTRY.read_text())
 EXTERNAL = {"id": "com.example.spiral", "name": "Spiral", "author": "Example", "repo": "example/spiral",
-            "description": "A spiral clip source for tests", "license": "Apache-2.0 OR MIT", "min_abi": "1.0.0"}
+            "description": "A spiral clip source for tests", "license": "Apache-2.0 OR MIT", "min_abi": "1.0.0", "repo_id": 4242}
 
 
 def amplugin(pid="com.example.spiral", version="1.2.0", abi="1.0.0", kinds=("clip-source",)):
@@ -44,8 +44,10 @@ class FakeSource:
         tag = asset["browser_download_url"].split("/download/")[1].split("/")[0]
         return self.releases_data[tag][asset["name"]]
 
+    repo_id = 4242
+
     def api(self, path):
-        return {"private": False, "archived": False, "license": {"spdx_id": "MIT"}}
+        return {"id": self.repo_id, "private": False, "archived": False, "license": {"spdx_id": "MIT"}}
 
 
 def release(version, data=None, digest=None, **kw):
@@ -100,6 +102,16 @@ class ValidateTests(unittest.TestCase):
     def test_id_must_be_reverse_domain(self):
         self.check(lambda d: d["plugins"].append(dict(EXTERNAL, id="spiral")), "does not match")
 
+    def test_external_entry_needs_repo_id_and_it_must_match(self):
+        self.check(lambda d: d["plugins"].append({k: v for k, v in EXTERNAL.items() if k != "repo_id"}), "need repo_id")
+        data = copy.deepcopy(REAL)
+        data["plugins"].append(dict(EXTERNAL))
+        RegistryFile(self, data)
+        self.assertEqual(registry.validate(offline=False, source=FakeSource({})), [])
+        other = FakeSource({})
+        other.repo_id = 7
+        self.assertTrue(any("repo_id says" in e for e in registry.validate(offline=False, source=other)))
+
     def test_license_must_be_osi_approved(self):
         self.check(lambda d: d["plugins"].append(dict(EXTERNAL, license="Proprietary")), "not OSI-approved")
         self.check(lambda d: d["plugins"].append(dict(EXTERNAL, license="CC-BY-NC-4.0")), "not OSI-approved")
@@ -151,6 +163,16 @@ class IndexTests(unittest.TestCase):
         self.assertTrue(problems and "no published release" in problems[0])
         index, problems = self.build({"com.example.spiral@1.2.0": release("1.2.0")}, entry=mono)
         self.assertEqual((problems, index["plugins"][0]["path"]), ([], "plugins/spiral"))
+
+    def test_repository_identity_is_pinned(self):
+        source = FakeSource({"v1.2.0": release("1.2.0")})
+        source.repo_id = 7  # renamed, transferred or re-created repository
+        data = copy.deepcopy(REAL)
+        data["plugins"] = [dict(EXTERNAL)]
+        RegistryFile(self, data)
+        index, problems = registry.build_index(source, {}, True, False)
+        self.assertIn("now has GitHub id 7", problems[0])
+        self.assertEqual(index["plugins"], [])
 
     def test_checksum_mismatch(self):
         _, problems = self.build({"v1.2.0": release("1.2.0", digest="0" * 64)})

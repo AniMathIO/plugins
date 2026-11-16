@@ -13,6 +13,7 @@ the editor's Plugins tab (AniMathIO 2.2+). To list yours, open a pull request th
   "author": "Ada Example",
   "description": "A keyframeable spiral clip source",
   "repo": "ada/animathio-spiral",
+  "repo_id": 123456789,
   "license": "MIT",
   "min_abi": "1.1.0"
 }
@@ -28,6 +29,10 @@ several plugins. A plugin developed in this repository goes under `community/<na
 * **Id**: a unique reverse-domain id you control (`com.example.spiral`, `io.github.<user>.<name>`),
   lowercase, never `org.animathio.*` (reserved for first-party plugins; the host will not load
   such an id from the user plugin folder). It must equal `id` in `plugin.toml`. Ids are never reused.
+* **Repository identity**: `repo_id` is the numeric GitHub id of your repository
+  (`gh api repos/<owner>/<name> --jq .id`). New releases are indexed automatically, so if the
+  repository is renamed, transferred or re-created the index stops serving it until a maintainer
+  re-reviews the entry (open a PR updating `repo`/`repo_id`).
 * **Source and license**: public GitHub repository with a recognizable `LICENSE`. The `license`
   field is an SPDX expression whose identifiers are all OSI-approved (or SIL OFL for bundled
   fonts and assets) and include the license GitHub detects in your repository. Keep the notices
@@ -81,8 +86,9 @@ ABI, and that the released package loads and renders with the released AniMathIO
 same checks locally with `python3 scripts/registry.py validate` and
 `python3 scripts/registry_smoke.py PATH/TO/animathio-cli DIR_WITH_AMPLUGIN`.
 
-CI builds the plugin from your repository, so review your own `build.rs` and dependencies as
-you would for any CI. Fork pull requests run with a read-only token and no secrets.
+For a pull request that adds or changes your entry, CI runs your repository's `build.sh` at the
+release tag (so `build.rs` and dependencies execute on a GitHub runner). That step gets no token
+or secrets and the workflow is read-only; pushes to `main` never build third-party source.
 
 ### Review
 

@@ -44,6 +44,11 @@
           "type": "string",
           "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?/[A-Za-z0-9._-]+$"
         },
+        "repo_id": {
+          "description": "Numeric GitHub id of repo (`gh api repos/<owner>/<name> --jq .id`). Required outside AniMathIO/plugins: new releases are indexed automatically, so the index builder refuses a repository that was renamed, deleted and re-created or transferred until a maintainer re-reviews it.",
+          "type": "integer",
+          "minimum": 1
+        },
         "path": {
           "description": "Subdirectory of repo that holds the plugin (plugin.toml, build.sh). Present for monorepos, including every plugin hosted in AniMathIO/plugins (community/<name>); when present, release tags must be <id>@<version>.",
           "type": "string",
