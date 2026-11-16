@@ -45,7 +45,7 @@
           "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?/[A-Za-z0-9._-]+$"
         },
         "repo_id": {
-          "description": "Numeric GitHub id of repo (`gh api repos/<owner>/<name> --jq .id`). Required outside AniMathIO/plugins: new releases are indexed automatically, so the index builder refuses a repository that was renamed, deleted and re-created or transferred until a maintainer re-reviews it.",
+          "description": "Numeric GitHub id of repo (`gh api repos/<owner>/<name> --jq .id`). Required outside AniMathIO/plugins: new releases are indexed automatically, so the index builder refuses a different repository at the configured name until a maintainer re-reviews it. Renames and transfers preserve this id; ownership changes are not detected.",
           "type": "integer",
           "minimum": 1
         },
