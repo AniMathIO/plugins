@@ -3,6 +3,40 @@
 A cargo-generate template, working examples and community index for AniMathIO 2.
 MIT licensed, like AniMathIO. Plugins are sandboxed WebAssembly components.
 
+## Contents
+
+- [Community plugins](#community-plugins)
+- [Installing a plugin](#installing-a-plugin)
+- [Quick start: write your own](#quick-start)
+- [Test in AniMathIO](#test-in-animathio)
+- [ABI compatibility](#abi-compatibility)
+
+## Community plugins
+
+| Name | Description | Source | License | CI | ABI |
+| --- | --- | --- | --- | --- | --- |
+| [Code Snippets](community/code-snippets) | Syntax-highlighted code with reveal and token morph animations | [Source](https://github.com/AniMathIO/plugins/tree/main/community/code-snippets) | MIT; font OFL-1.1 | [Plugins CI](https://github.com/AniMathIO/plugins/actions/workflows/ci.yml) | 1.1.0 |
+
+Submit a PR adding a row under the rules in
+[CONTRIBUTING.md](CONTRIBUTING.md). A listing is not an endorsement or security audit.
+
+## Installing a plugin
+
+Plugins are `.amplugin` files. AniMathIO loads every bundle in your user plugin folder at
+startup; restart the editor after adding or removing one:
+
+| OS | User plugin folder |
+| --- | --- |
+| Linux | `~/.local/share/animathio/plugins` |
+| macOS | `~/Library/Application Support/animathio/plugins` |
+| Windows | `%APPDATA%\animathio\plugins` |
+
+Community plugins are never bundled or enabled by AniMathIO itself: you install the ones
+you want. They run in the same sandbox as first-party plugins (no network or file access,
+memory and time limits), and they cannot replace the bundled `org.animathio.*` plugins.
+Build a plugin from its folder with `bash build.sh` (see each plugin's README) and copy
+the resulting `.amplugin` into the folder above.
+
 ## Quick start
 
 Install stable Rust, Python 3.11+ and cargo-generate, then:
@@ -23,11 +57,11 @@ that inverts RGB and preserves alpha. Each is standalone: run its `build.sh`.
 
 ## Test in AniMathIO
 
-Put your `.amplugin` bundles in a directory and start the editor with
-`ANIMATHIO_PLUGIN_DIR=/absolute/path/to/plugins animathio`. Add a source from the
-Library or apply invert through Effects. This override replaces bundled discovery;
-include bundled plugins in that directory if your project uses them. The current
-host searches installation-relative plugin directories, not a user plugin folder.
+Copy your `.amplugin` into the user plugin folder (see [Installing a plugin](#installing-a-plugin))
+and restart the editor, then add a source from the Library or apply invert through Effects.
+For quick iteration you can instead start the editor with
+`ANIMATHIO_PLUGIN_DIR=/absolute/path/to/plugins animathio`; that override is searched
+first, so include the bundled plugins in that directory if your project uses them.
 
 For a headless host check, install Pillow (`python3 -m pip install Pillow`), download the Linux deb from the
 [v2.0.0 release](https://github.com/AniMathIO/AniMathIO/releases/tag/v2.0.0),
@@ -46,13 +80,3 @@ saved-value semantics. Follow the canonical
 [authoring and compatibility guide](https://github.com/AniMathIO/AniMathIO/blob/main/docs/plugins.md)
 for WIT worlds, host imports, schema, packaging and sandbox limits.
 The host provides bounded services; plugins have no direct network or filesystem access.
-
-## Community plugins
-
-| Name | Description | Source | License | CI | ABI |
-| --- | --- | --- | --- | --- | --- |
-
-| [Code Snippets](community/code-snippets) | Syntax-highlighted code with reveal and token morph animations | [Source](https://github.com/AniMathIO/plugins/tree/main/community/code-snippets) | MIT; font OFL-1.1 | [Plugins CI](https://github.com/AniMathIO/plugins/actions/workflows/ci.yml) | 1.1.0 |
-
-Submit a PR adding a row under the rules in
-[CONTRIBUTING.md](CONTRIBUTING.md). A listing is not an endorsement or security audit.
