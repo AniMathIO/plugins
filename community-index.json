@@ -1,6 +1,26 @@
 {
   "$schema": "./schemas/community-index.schema.json",
   "schema_version": 1,
-  "plugins": [],
+  "plugins": [
+    {
+      "id": "io.github.animathio.code-snippets",
+      "name": "Code Snippets",
+      "author": "AniMathIO",
+      "description": "Syntax-highlighted code with type-on reveal and token morph animations",
+      "license": "MIT AND OFL-1.1",
+      "repo": "AniMathIO/plugins",
+      "path": "community/code-snippets",
+      "source_url": "https://github.com/AniMathIO/plugins/tree/HEAD/community/code-snippets",
+      "kinds": [
+        "clip-source"
+      ],
+      "min_abi": "1.1.0",
+      "version": "0.1.0",
+      "download_url": "https://github.com/AniMathIO/plugins/releases/download/io.github.animathio.code-snippets%400.1.0/io.github.animathio.code-snippets-0.1.0.amplugin",
+      "sha256": "7c70ddaf53daf733ae360e0479c41f105078c0a4ede75ed3d6c0147c710d2b28",
+      "size": 771002,
+      "released_at": "2026-11-17T00:16:03Z"
+    }
+  ],
   "delisted": []
 }
