@@ -1,6 +1,6 @@
 # AniMathIO plugins
 
-A cargo-generate template, working examples and community index for AniMathIO 2.
+A cargo-generate template, working examples and the community plugin registry for AniMathIO 2.
 MIT licensed, like AniMathIO. Plugins are sandboxed WebAssembly components.
 
 ## Contents
@@ -13,17 +13,29 @@ MIT licensed, like AniMathIO. Plugins are sandboxed WebAssembly components.
 
 ## Community plugins
 
-| Name | Description | Source | License | CI | ABI |
+<!-- community-plugins:start -->
+| Name | Author | Description | License | ABI | Source |
 | --- | --- | --- | --- | --- | --- |
-| [Code Snippets](community/code-snippets) | Syntax-highlighted code with reveal and token morph animations | [Source](https://github.com/AniMathIO/plugins/tree/main/community/code-snippets) | MIT; font OFL-1.1 | [Plugins CI](https://github.com/AniMathIO/plugins/actions/workflows/ci.yml) | 1.1.0 |
+| [Code Snippets](https://github.com/AniMathIO/plugins/tree/HEAD/community/code-snippets) | AniMathIO | Syntax-highlighted code with type-on reveal and token morph animations | MIT AND OFL-1.1 | 1.1.0 | [AniMathIO/plugins](https://github.com/AniMathIO/plugins/tree/HEAD/community/code-snippets) |
+<!-- community-plugins:end -->
 
-Submit a PR adding a row under the rules in
-[CONTRIBUTING.md](CONTRIBUTING.md). A listing is not an endorsement or security audit.
+Install from the editor's Plugins tab in AniMathIO 2.2+, or manually as described
+[below](#installing-a-plugin). Every
+plugin is a versioned GitHub release with a SHA-256 checksum; the editor reads the generated
+[`community-index.json`](community-index.json) and verifies each download against it.
+
+This table is generated from [`community-plugins.json`](community-plugins.json). To list your
+plugin, open a PR adding an entry under the rules in [CONTRIBUTING.md](CONTRIBUTING.md); the
+registry format, release convention and index are specified in [docs/registry.md](docs/registry.md).
+A listing is not an endorsement or security audit.
 
 ## Installing a plugin
 
-Plugins are `.amplugin` files. AniMathIO loads every bundle in your user plugin folder at
-startup; restart the editor after adding or removing one:
+In AniMathIO 2.2+ use the editor's Plugins tab (Browse, Install, then enable the plugin).
+To install manually, download `<id>-<version>.amplugin` from the plugin's release
+(for the plugins hosted here: the [releases page](https://github.com/AniMathIO/plugins/releases))
+and check it against the `.sha256` asset. AniMathIO loads every bundle in your user plugin
+folder at startup; restart the editor after adding or removing one:
 
 | OS | User plugin folder |
 | --- | --- |
@@ -31,11 +43,11 @@ startup; restart the editor after adding or removing one:
 | macOS | `~/Library/Application Support/animathio/plugins` |
 | Windows | `%APPDATA%\animathio\plugins` |
 
-Community plugins are never bundled or enabled by AniMathIO itself: you install the ones
-you want. They run in the same sandbox as first-party plugins (no network or file access,
+Community plugins are never bundled or enabled by AniMathIO itself: you install (and enable)
+the ones you want. They run in the same sandbox as first-party plugins (no network or file access,
 memory and time limits), and they cannot replace the bundled `org.animathio.*` plugins.
-Build a plugin from its folder with `bash build.sh` (see each plugin's README) and copy
-the resulting `.amplugin` into the folder above.
+To build one from source instead, run `bash build.sh` in its folder (see each plugin's README)
+and copy the resulting `.amplugin` into the folder above.
 
 ## Quick start
 

@@ -54,7 +54,7 @@ TARGET = '''fn fibonacci(n: u32) -> u64 {
 }'''
 
 def render(name, frame=0, **params):
-    clip['kind'] = {'Plugin': {'plugin_id': 'org.animathio.community.code-snippets',
+    clip['kind'] = {'Plugin': {'plugin_id': 'io.github.animathio.code-snippets',
                              'params': dict(dict(code=CODE, code_to=TARGET, font_size=4.0), **params)}}
     file = WORK / (name + '.amio')
     with zipfile.ZipFile(file, 'w', zipfile.ZIP_DEFLATED) as z:

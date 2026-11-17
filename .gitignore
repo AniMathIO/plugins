@@ -2,3 +2,4 @@
 .host/
 .generated/
 *.deb
+__pycache__/

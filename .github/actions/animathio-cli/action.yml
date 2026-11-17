@@ -1,0 +1,38 @@
+name: Released AniMathIO CLI
+description: Download a released AniMathIO AppImage, verify its SHA-256 and extract animathio-cli.
+inputs:
+  github-token:
+    description: Token for `gh release download` (the release is public).
+    required: true
+  tag:
+    description: AniMathIO release tag.
+    default: v2.1.0
+  asset:
+    description: AppImage asset name.
+    default: animathio_2.1.0_x86_64.AppImage
+  sha256:
+    description: Pinned SHA-256 of the asset.
+    default: cce18dd8215aa9c23ba7c5756e6c0785c1931dd027aadf31a7bbbf3b92fac6ec
+outputs:
+  cli:
+    description: Absolute path of the extracted animathio-cli.
+    value: ${{ steps.extract.outputs.cli }}
+runs:
+  using: composite
+  steps:
+    - id: extract
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        TAG: ${{ inputs.tag }}
+        ASSET: ${{ inputs.asset }}
+        SHA256: ${{ inputs.sha256 }}
+      run: |
+        set -euo pipefail
+        dir="$RUNNER_TEMP/animathio-cli"
+        mkdir -p "$dir"
+        gh release download "$TAG" --repo AniMathIO/AniMathIO --pattern "$ASSET" --dir "$dir"
+        echo "$SHA256  $dir/$ASSET" | sha256sum -c -
+        chmod +x "$dir/$ASSET"
+        (cd "$dir" && "./$ASSET" --appimage-extract > /dev/null)
+        echo "cli=$dir/squashfs-root/usr/bin/animathio-cli" >> "$GITHUB_OUTPUT"

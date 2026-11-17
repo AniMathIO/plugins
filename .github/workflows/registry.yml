@@ -1,0 +1,74 @@
+name: Registry
+# Submission checks for community-plugins.json (see docs/registry.md and CONTRIBUTING.md).
+on:
+  pull_request:
+    paths:
+      - community-plugins.json
+      - community/**
+      - schemas/**
+      - scripts/registry*.py
+      - scripts/check_submission.py
+      - scripts/test_registry.py
+      - scripts/requirements.txt
+      - README.md
+      - .github/workflows/registry.yml
+      - .github/actions/**
+  push:
+    branches: [main]
+    paths:
+      - community-plugins.json
+      - schemas/**
+      - scripts/**
+      - .github/workflows/registry.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  registry:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CARGO_BUILD_JOBS: 3
+      CARGO_PROFILE_DEV_DEBUG: 0
+      CARGO_INCREMENTAL: 0
+      ANIMATHIO_AUDIO: none
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install tools
+        run: |
+          python3 -m pip install -r scripts/requirements.txt
+          rustup toolchain install stable --profile minimal --target wasm32-wasip2
+          rustup default stable
+      - name: Registry script tests
+        run: python3 -m unittest discover -s scripts -v
+      - name: Validate community-plugins.json
+        # Schema, unique and unreserved ids, public repositories, OSI/OFL licenses, README table.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/registry.py validate
+      - name: Resolve releases into an index
+        # External plugins need a published release (asset + .sha256); plugins hosted here are
+        # released after merge, so they are built below instead.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/registry.py index --strict --allow-unreleased-hosted --previous /dev/null --output "$RUNNER_TEMP/index.json"
+      - name: Released AniMathIO CLI
+        id: cli
+        uses: ./.github/actions/animathio-cli
+        with:
+          github-token: ${{ github.token }}
+      - name: Build and smoke-test changed entries
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git show "origin/$BASE_REF:community-plugins.json" > "$RUNNER_TEMP/base.json" 2>/dev/null || echo '{"plugins":[]}' > "$RUNNER_TEMP/base.json"
+            scope=(--base "$RUNNER_TEMP/base.json" --build-external)
+          else
+            scope=(--all)
+          fi
+          # Third-party build scripts may run above: no token is passed to this step.
+          python3 scripts/check_submission.py "${{ steps.cli.outputs.cli }}" "$RUNNER_TEMP/index.json" "$RUNNER_TEMP/work" "${scope[@]}"

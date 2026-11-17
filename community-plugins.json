@@ -1,0 +1,17 @@
+{
+  "$schema": "./schemas/community-plugins.schema.json",
+  "schema_version": 1,
+  "plugins": [
+    {
+      "id": "io.github.animathio.code-snippets",
+      "name": "Code Snippets",
+      "author": "AniMathIO",
+      "description": "Syntax-highlighted code with type-on reveal and token morph animations",
+      "repo": "AniMathIO/plugins",
+      "path": "community/code-snippets",
+      "license": "MIT AND OFL-1.1",
+      "min_abi": "1.1.0"
+    }
+  ],
+  "delisted": []
+}
