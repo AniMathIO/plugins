@@ -54,7 +54,7 @@ at 2.5 m/s with 6.25 J in total.
 | `speed` | 15 | 0–40 m/s initial speed for projectiles, the first disk, or the domino launcher |
 | `angle_deg` | 45 | 0–90° launch angle or pendulum release angle |
 | `length_m` | 1.5 | 0.2–10 m pendulum length or spring equilibrium extension |
-| `restitution` | 0.8 | 0–1 coefficient of restitution for disk contacts, the launcher rebound and impact transfer in the domino row |
+| `restitution` | 0.8 | 0–1 coefficient of restitution for disk contacts, the launcher’s contact with the first domino and impact transfer in the domino row |
 | `friction` | 0 | 0–1 tangential friction for disk contacts and rolling resistance in the domino launcher |
 | `show_vectors` | true | Show velocity arrows |
 | `show_trail` | true | Show motion traces |

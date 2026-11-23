@@ -285,8 +285,7 @@ pub fn stack(count: usize, speed: f64, material: Material, plan: Plan, trace: bo
             let impulse = (1.0 + material.restitution) * ball.vx / (1.0 + arm * arm / inertia);
             blocks[0].omega = impulse * arm / inertia;
             ball.x = ball_contact;
-            // Stop a non-rebounding ball at the base of the row.
-            ball.vx = (ball.vx - impulse).min(0.0);
+            ball.vx -= impulse;
             launched = true;
         }
         ball.angle = -(ball.x - BALL_START) / STACK_BALL_R;

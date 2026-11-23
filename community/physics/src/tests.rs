@@ -258,32 +258,37 @@ fn neighboring_dominoes_do_not_penetrate_during_replay() {
 }
 
 #[test]
-fn domino_ball_rebounds_with_configured_restitution() {
+fn domino_launcher_contact_speed_matches_configured_restitution() {
     let p = read_params(&[]).unwrap();
-    let sample = |restitution, time| {
+    let plan = sim::Plan::new(1.0, p.duration);
+    for restitution in [0.0, 0.1, 0.25, 0.4, 0.8, 1.0] {
         let material = sim::Material {
+            gravity: 0.0,
+            friction: 0.0,
             restitution,
-            ..p.material()
         };
-        sim::stack(
-            p.bodies,
-            p.speed,
-            material,
-            sim::Plan::new(time / p.duration, p.duration),
-            false,
-        )
-        .bodies[0]
-    };
-    assert_eq!(sample(0.0, 0.2).vx, 0.0);
-    let arm = sim::STACK_BALL_R;
-    let inertia = ((2.0 * sim::DOMINO_HX).powi(2) + (2.0 * sim::DOMINO_HY).powi(2)) / 3.0;
-    for restitution in [0.4, 0.8, 1.0] {
-        let after = sample(restitution, 0.2);
-        assert!(after.vx < 0.0);
-        let impulse = p.speed - after.vx;
-        let contact_speed = impulse * arm * arm / inertia;
-        assert!((contact_speed - after.vx - p.speed * restitution).abs() < 1e-12);
-        assert!(sample(restitution, 0.3).x < after.x);
+        let sample = |steps| {
+            sim::stack(
+                p.bodies,
+                p.speed,
+                material,
+                sim::Plan { steps, ..plan },
+                false,
+            )
+        };
+        let impact_step = (1..=plan.steps)
+            .find(|&steps| sample(steps).bodies[1].angle < 0.0)
+            .expect("the launcher hits the first domino");
+        let incoming = sample(impact_step - 1).bodies[0].vx;
+        let after = sample(impact_step).bodies;
+        // With gravity off, the first angle increment gives the angular
+        // velocity from the impulse. The initial contact arm is the ball radius.
+        let contact_speed = -after[1].angle / plan.dt * sim::STACK_BALL_R;
+        let separation = contact_speed - after[0].vx;
+        assert!(
+            (separation - restitution * incoming).abs() < 1e-12,
+            "restitution {restitution}: separation {separation} m/s, approach {incoming} m/s"
+        );
     }
 }
 
