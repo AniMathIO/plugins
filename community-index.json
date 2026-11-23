@@ -20,6 +20,44 @@
       "sha256": "7c70ddaf53daf733ae360e0479c41f105078c0a4ede75ed3d6c0147c710d2b28",
       "size": 771002,
       "released_at": "2026-11-17T00:16:03Z"
+    },
+    {
+      "id": "io.github.animathio.molecule",
+      "name": "Molecule Studio",
+      "author": "AniMathIO",
+      "description": "Self-drawing 2D molecular structures and reactions from SMILES, with CPK colors and wedge/dash stereo",
+      "license": "MIT",
+      "repo": "AniMathIO/plugins",
+      "path": "community/molecule",
+      "source_url": "https://github.com/AniMathIO/plugins/tree/HEAD/community/molecule",
+      "kinds": [
+        "clip-source"
+      ],
+      "min_abi": "1.1.0",
+      "version": "0.1.0",
+      "download_url": "https://github.com/AniMathIO/plugins/releases/download/io.github.animathio.molecule%400.1.0/io.github.animathio.molecule-0.1.0.amplugin",
+      "sha256": "c8783b3d5003e0efd7f78d8c43df34defe4060abf8abb450860bd291c8469564",
+      "size": 391033,
+      "released_at": "2026-11-23T09:05:41Z"
+    },
+    {
+      "id": "io.github.animathio.optics",
+      "name": "Ray Optics",
+      "author": "AniMathIO",
+      "description": "Animated lens and mirror rays, Snell refraction, total internal reflection and prism dispersion",
+      "license": "MIT",
+      "repo": "AniMathIO/plugins",
+      "path": "community/optics",
+      "source_url": "https://github.com/AniMathIO/plugins/tree/HEAD/community/optics",
+      "kinds": [
+        "clip-source"
+      ],
+      "min_abi": "1.1.0",
+      "version": "0.1.0",
+      "download_url": "https://github.com/AniMathIO/plugins/releases/download/io.github.animathio.optics%400.1.0/io.github.animathio.optics-0.1.0.amplugin",
+      "sha256": "f77712a165a3533e7ce75630ab7b582192b8dc897c0e54a0dff462ceb54eef07",
+      "size": 92227,
+      "released_at": "2026-11-23T09:05:47Z"
     }
   ],
   "delisted": []
