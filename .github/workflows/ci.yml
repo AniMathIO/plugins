@@ -51,6 +51,18 @@ jobs:
           chmod +x .host/code-snippets/*.AppImage
           (cd .host/code-snippets && ./animathio_2.1.0_x86_64.AppImage --appimage-extract > /dev/null)
           python3 community/code-snippets/smoke.py .host/code-snippets/squashfs-root/usr/bin/animathio-cli target/plugins
+      - name: Get released AniMathIO 2.3.0
+        id: molecule-host
+        uses: ./.github/actions/animathio-cli
+        with:
+          github-token: ${{ github.token }}
+          tag: v2.3.0
+          asset: animathio_2.3.0_x86_64.AppImage
+          sha256: ca7d4e613a7ec049bdb9aa8ecf6fc63ddae2ce10c70b2ec26632569a9ebdd148
+      - name: Test Molecule Studio on released 2.3.0
+        env:
+          ANIMATHIO_CLI: ${{ steps.molecule-host.outputs.cli }}
+        run: python3 community/molecule/smoke.py "$ANIMATHIO_CLI" target/plugins
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: plugins
