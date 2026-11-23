@@ -85,9 +85,15 @@ assert frames['lens-diagram-100'].tobytes() != frames['lens-diverging'].tobytes(
 frames['lens-magnifier'] = render('lens-magnifier', setup='lens-diagram', progress=1, object_distance=12, object_height=10, focal_length=20)
 assert frames['lens-diagram-100'].tobytes() != frames['lens-magnifier'].tobytes()
 frames['lens-at-focus'] = render('lens-at-focus', setup='lens-diagram', object_distance=20)
-frames['mirror-concave-virtual'] = render('mirror-concave-virtual', setup='mirror', object_distance=10, object_height=6)
+frames['mirror-concave-virtual'] = render('mirror-concave-virtual', setup='mirror', object_distance=10)
 frames['mirror-convex'] = render('mirror-convex', setup='mirror', progress=1, curvature=-30)
 assert frames['mirror-100'].tobytes() != frames['mirror-convex'].tobytes()
+# Magnified conjugates must stay on the diagram: the object between C and F
+# (real, inverted, magnified) and between F and the mirror in the lens case.
+frames['mirror-magnified'] = render('mirror-magnified', setup='mirror', progress=1, object_distance=20)
+assert frames['mirror-100'].tobytes() != frames['mirror-magnified'].tobytes()
+frames['lens-magnified-real'] = render('lens-magnified-real', setup='lens-diagram', progress=1, object_distance=25)
+assert frames['lens-diagram-100'].tobytes() != frames['lens-magnified-real'].tobytes()
 frames['refraction-steep'] = render('refraction-steep', setup='refraction', progress=1, angle_deg=70)
 assert frames['refraction-100'].tobytes() != frames['refraction-steep'].tobytes()
 frames['refraction-no-labels'] = render('refraction-no-labels', setup='refraction', progress=1, show_labels=False)
@@ -132,6 +138,6 @@ if '--screenshots' in sys.argv:
     for setup, label in names.items():
         for p in [0, 25, 50, 75, 100]:
             frames[f'{setup}-{p:03}'].save(out / f'{label}-{p:03}.png', optimize=True)
-    for name in ['lens-diverging', 'lens-magnifier', 'mirror-convex', 'mirror-concave-virtual']:
+    for name in ['lens-diverging', 'lens-magnifier', 'lens-magnified-real', 'mirror-convex', 'mirror-concave-virtual', 'mirror-magnified']:
         frames[name].save(out / f'{name}.png', optimize=True)
 print('All released-host checks passed')

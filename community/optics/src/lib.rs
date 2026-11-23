@@ -128,6 +128,19 @@ fn validate_setup(setup: &str) -> Result<&'static str, Diagnostic> {
         .ok_or_else(|| error("Unsupported setup"))
 }
 
+/// Signed paraxial focal length (f = R/2) of the mirror setup from the
+/// `curvature` parameter, in percent of the canvas short edge. Negative
+/// curvature is a convex mirror and gets a negative focal length; magnitudes
+/// below the 10% radius floor use the floored radius, so 0 is concave.
+fn mirror_focal(curvature: f64, unit: f64) -> f64 {
+    let radius = curvature.abs().max(10.0) / 100.0 * unit;
+    if curvature < 0.0 {
+        -radius / 2.0
+    } else {
+        radius / 2.0
+    }
+}
+
 impl Guest for RayOptics {
     fn describe() -> Manifest {
         Manifest {
@@ -251,12 +264,7 @@ fn render(params: &[ParamEntry], size: Size) -> Result<Scene, Diagnostic> {
     let index_1 = number(params, "index_1", 1.0, 1.0, 2.5)?;
     let index = number(params, "index", 1.5, 1.0, 2.5)?;
     let curvature = number(params, "curvature", 30.0, -50.0, 50.0)?;
-    let radius = curvature.abs().max(10.0) / 100.0 * unit;
-    let mirror_focal = if curvature < 0.0 {
-        -radius / 2.0
-    } else {
-        radius / 2.0
-    };
+    let mirror_focal = mirror_focal(curvature, unit);
     let angle = number(params, "angle_deg", 45.0, 0.0, 89.0)?.to_radians();
     let ray_count = number(
         params,

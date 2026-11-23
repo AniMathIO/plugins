@@ -62,6 +62,38 @@ pub fn prism_beam(unit: f64, angle: f64) -> ([V; 3], V, V) {
     (corners, corners[0].lerp(corners[1], 0.5), incident)
 }
 
+/// Shrink a magnified principal-ray construction to the diagram bounds by
+/// scaling the focal length, the distances and the heights together. The
+/// thin-lens/mirror equations are scale invariant, so the magnification and
+/// every angle stay the same while the image arrow and the third (focal or
+/// centre) ray, which hit the element at m·height, come back on screen. This
+/// is what keeps concave-mirror setups between C and F, or inside F, showing
+/// their (strongly magnified) image instead of dropping it.
+fn fit_conjugates(
+    f: f64,
+    distance: f64,
+    height: f64,
+    unit: f64,
+    half_width: f64,
+) -> (f64, f64, f64) {
+    let Some((d, m)) = conjugates(f, distance) else {
+        return (f, distance, height);
+    };
+    let tip = (m * height).abs();
+    // 98% of the image-arrow guard in `principal`, so the scaled result can
+    // never sit exactly on the cut-off; the ray budget is the 0.36·unit
+    // aperture with its own margin.
+    let need = (d.abs() / (0.98 * (half_width - 0.075 * unit)))
+        .max(tip / (0.98 * 0.39 * unit))
+        .max(tip / (0.85 * 0.36 * unit))
+        .max(1.0);
+    if need > 1.0 {
+        (f / need, distance / need, height / need)
+    } else {
+        (f, distance, height)
+    }
+}
+
 impl Diagram<'_> {
     fn font(&self) -> f64 {
         (0.031 * self.unit).max(1.0)
@@ -133,6 +165,8 @@ impl Diagram<'_> {
         let u = self.unit;
         let side = if mirror { -1.0 } else { 1.0 };
         let distance = distance.min(self.half_width - 0.10 * u);
+        let (f, distance, object_height) =
+            fit_conjugates(f, distance, object_height, u, self.half_width);
         let object = V::new(-distance, 0.0);
         let tip = V::new(-distance, object_height);
         let image = conjugates(f, distance).map(|(d, m)| (d, V::new(side * d, m * object_height)));
@@ -253,6 +287,8 @@ impl Diagram<'_> {
                 let x = x.clamp(-self.half_width + 0.132 * u, self.half_width - 0.132 * u);
                 self.label(label, V::new(x, y), labels);
             }
+            // Defensive: fit_conjugates scales finite conjugates inside the
+            // guard above, so this arm only catches a future regression.
             Some((d, _)) => self.label(
                 if d < 0.0 {
                     "Virtual image beyond frame"
@@ -457,18 +493,22 @@ impl Diagram<'_> {
         let markers = phase(self.progress, 0.26, 0.51);
         self.arc(hit, 0.12, -FRAC_PI_2, -angle, markers);
         self.label(
-            &format!("θ = {}°", fmt(angle.to_degrees(), 1)),
+            &format!("θ₁ = {}°", fmt(angle.to_degrees(), 1)),
             start.lerp(hit, 0.52) + incident.perp() * (0.10 * u),
             markers,
         );
+        // The ray starts in the slab, so the incident medium n₁ is the lower
+        // one — the same n₁ = incident-medium convention as the refraction
+        // setup, which is why the two labels swap sides relative to `outside`
+        // and `inside` there.
         self.label(
-            &format!("n₁ = {}", fmt(outside, 2)),
-            V::new(-0.33 * u, 0.28 * u),
+            &format!("n₁ = {}", fmt(inside, 2)),
+            V::new(0.34 * u, -0.24 * u),
             markers,
         );
         self.label(
-            &format!("n₂ = {}", fmt(inside, 2)),
-            V::new(0.34 * u, -0.24 * u),
+            &format!("n₂ = {}", fmt(outside, 2)),
+            V::new(-0.33 * u, 0.28 * u),
             markers,
         );
         if let Some(critical) = geom::critical_angle(inside, outside) {
@@ -479,8 +519,8 @@ impl Diagram<'_> {
                 self.palette.marker.with_alpha(0.72),
             );
             self.label(
-                &format!("Critical angle {}°", fmt(critical.to_degrees(), 1)),
-                V::new(0.22 * u, 0.29 * u),
+                &format!("sin θc = n₂/n₁ → θc = {}°", fmt(critical.to_degrees(), 1)),
+                V::new(0.24 * u, 0.29 * u),
                 markers,
             );
         }

@@ -4,17 +4,22 @@
 //! the standard piecewise approximation of the spectral locus (400–700 nm);
 //! it is a display approximation, not a colorimetric conversion.
 
-/// Cauchy dispersion strength (µm²) used for the glass; a middle value between
-/// crown and flint glasses, chosen for a clearly visible prism spread.
-const CAUCHY_B: f64 = 0.010;
+/// Cauchy dispersion strength (µm²) of a glass whose 550 nm index is 1.5 —
+/// about BK7 (B ≈ 0.004 µm²). The coefficient scales with n − 1, so weaker
+/// media disperse proportionally less and an index of exactly 1 (vacuum)
+/// disperses nothing.
+const CAUCHY_B_AT_1_5: f64 = 0.004;
+/// Reference index the coefficient above is quoted at.
+const REFERENCE_N: f64 = 1.5;
 /// Reference wavelength (µm) the plugin's `index` parameter is calibrated at.
 const REFERENCE_UM: f64 = 0.55;
 
-/// Refractive index at `lambda_nm` for a glass whose 550 nm index is `base`.
+/// Refractive index at `lambda_nm` for a medium whose 550 nm index is `base`.
 pub fn index_at(base: f64, lambda_nm: f64) -> f64 {
     let lambda_um = lambda_nm / 1000.0;
-    let a = base - CAUCHY_B / (REFERENCE_UM * REFERENCE_UM);
-    (a + CAUCHY_B / (lambda_um * lambda_um)).max(1.0)
+    let b = CAUCHY_B_AT_1_5 * (base - 1.0) / (REFERENCE_N - 1.0);
+    let a = base - b / (REFERENCE_UM * REFERENCE_UM);
+    (a + b / (lambda_um * lambda_um)).max(1.0)
 }
 
 /// Approximate sRGB colour of a monochromatic 400–700 nm light, gamma-naive

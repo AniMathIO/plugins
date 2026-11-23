@@ -31,7 +31,7 @@ independently.
 | `lens-diagram` | Parallel, optical-centre and focal rays for a converging or diverging thin lens, with F/2F markers and the object and image arrows. |
 | `mirror` | Parallel, vertex and focal rays for a concave or convex mirror, with its focal point F and centre of curvature C. |
 | `refraction` | Transmission through a parallel slab, incidence and transmission angles measured from the normal, and Snell's equation. The exit ray is parallel to the incident ray when both faces transmit. |
-| `tir` | An angle sweep from the lower medium into the upper medium, with the critical angle marked when one exists. The reflected branch below that threshold uses schematic brightness. |
+| `tir` | An angle sweep from the lower medium into the upper medium, with the critical angle marked when one exists. Media follow the same convention as `refraction`: n₁ is the medium the ray starts in (the slab, labelled below the interface) and n₂ the one it would transmit into, with `sin θc = n₂/n₁` shown next to the marked critical direction. The reflected branch below that threshold uses schematic brightness. |
 | `dispersion` | An incident white beam in air and wavelength-dependent refraction through an equilateral prism. Shorter wavelengths have higher indices and, in the default setup, bend farther toward the base. |
 
 Real images are where solid outgoing rays converge. Virtual images use dashed
@@ -39,8 +39,11 @@ back-projections and a dashed image arrow. The lens bends rays at its optical
 plane, and the spherical mirror uses its vertex plane and the paraxial relation
 `f = R/2`. A ray that would miss the on-screen aperture is omitted. With the
 object at the focus, the outgoing rays are parallel and the label shows
-**Image at infinity**. Finite images outside the diagram are labelled as such.
-For the geometric conventions, see OpenStax on [thin lenses](https://openstax.org/books/university-physics-volume-3/pages/2-4-thin-lenses)
+**Image at infinity**. Strongly magnified conjugates — a concave mirror or
+converging lens with the object between F and 2F, or inside F — shrink the
+whole construction (focal length, distances and heights together) until the
+image arrow and all three rays fit, so the magnified image always stays on the
+diagram. For the geometric conventions, see OpenStax on [thin lenses](https://openstax.org/books/university-physics-volume-3/pages/2-4-thin-lenses)
 and [spherical mirrors](https://openstax.org/books/university-physics-volume-3/pages/2-2-spherical-mirrors).
 
 ## Parameters
@@ -64,8 +67,10 @@ and [spherical mirrors](https://openstax.org/books/university-physics-volume-3/p
 | `spectrum` | true | Trace colored wavelengths. Switch off for one 550 nm ray in the accent color. |
 | `accent` | `#FFCD42FF` | Color and opacity of the main rays. |
 
-The prism uses a two-term Cauchy curve with a fixed coefficient of
-`0.010 µm²`, calibrated at 550 nm and floored at an index of 1. The spectrum
+The prism uses a two-term Cauchy curve calibrated at 550 nm whose coefficient
+`B = 0.008 µm² · (n − 1)` scales with n − 1: about 0.004 µm² at n = 1.5
+(BK7-like), proportionally weaker for lower indices, and exactly zero at an
+index of 1, which is why vacuum disperses nothing. The spectrum
 uses approximate display colors sampled from 400 to 700 nm. A ray that strikes
 a prism corner ends there because the corner has no unique surface normal.
 The tracer caps interactions at 8 per ray and budgets 256 segments across a
@@ -89,6 +94,12 @@ also contains 0%, 25%, 50% and 75% frames for each setup.
 | --- | --- | --- | --- |
 | ![Snell's law at a slab](screenshots/refraction-100.png) | ![Transmitted and reflected rays](screenshots/tir-075.png) | ![Only the reflected ray](screenshots/tir-100.png) | ![Violet bends farther toward the base than red](screenshots/dispersion-100.png) |
 
+Magnified conjugates shrink to fit instead of leaving the diagram:
+
+| Lens, object between F and 2F | Mirror, object between C and F | Mirror, object inside F |
+| --- | --- | --- |
+| ![Magnified real image from a converging lens](screenshots/lens-magnified-real.png) | ![Magnified inverted real image from a concave mirror](screenshots/mirror-magnified.png) | ![Magnified virtual image behind the mirror at the default height](screenshots/mirror-concave-virtual.png) |
+
 ## Verification and credits
 
 ```sh
@@ -98,7 +109,8 @@ python3 community/optics/smoke.py /path/to/animathio-cli community/optics/target
 ```
 
 The smoke script needs Pillow and a released 2.3.0 CLI. It verifies progressive
-rendering, repeat PNG bytes for each setup, parameter toggles, a sampled
+rendering, repeat PNG bytes for each setup, parameter toggles, magnified mirror
+and lens conjugates, a sampled
 keyframe, a portrait render, and a 64-ray prism under the host's default
 limits. Frames depend only on the evaluated parameters and canvas size.
 The component emits vector paths and host-rendered text. It calls no host

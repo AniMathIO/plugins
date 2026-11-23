@@ -23,6 +23,51 @@ fn scene(p: &[ParamEntry]) -> Scene {
     .unwrap()
 }
 
+fn texts(scene: &Scene) -> Vec<&str> {
+    scene
+        .elements
+        .iter()
+        .filter_map(|e| match e {
+            DrawCommand::TextRun(t) => Some(t.text.as_str()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Every emitted coordinate must be finite and stay on the canvas, including
+/// the degenerate near-focus cases.
+fn assert_finite_and_on_canvas(scene: &Scene, size: Size) {
+    let (width, height) = (f64::from(size.width), f64::from(size.height));
+    let ok = |x: f64, y: f64, what: &str| {
+        assert!(
+            x.is_finite() && y.is_finite(),
+            "non-finite {what} ({x}, {y})"
+        );
+        assert!(
+            x.abs() <= width * 1.01 && y.abs() <= height * 1.01,
+            "off-canvas {what} ({x}, {y})"
+        );
+    };
+    for element in &scene.elements {
+        match element {
+            DrawCommand::StrokePath((verbs, _)) | DrawCommand::FillPath((verbs, _)) => {
+                for verb in verbs {
+                    match verb {
+                        PathVerb::MoveTo(p) | PathVerb::LineTo(p) => {
+                            ok(f64::from(p.x), f64::from(p.y), "path point")
+                        }
+                        PathVerb::QuadTo((p, _)) | PathVerb::CubicTo((p, _, _)) => {
+                            ok(f64::from(p.x), f64::from(p.y), "control point")
+                        }
+                        PathVerb::Close => {}
+                    }
+                }
+            }
+            DrawCommand::TextRun(t) => ok(f64::from(t.x), f64::from(t.y), "text"),
+        }
+    }
+}
+
 const TINY: f64 = 1e-9;
 
 #[test]
@@ -173,6 +218,123 @@ fn critical_angle_value_is_the_textbook_one() {
 }
 
 #[test]
+fn snell_and_critical_angle_labels_are_explicit() {
+    // Refraction air -> glass at 45 deg transmits at asin(sin 45 / 1.5).
+    let refr = scene(&params(&[
+        ("setup", ParamValue::EnumChoice("refraction".into())),
+        ("angle_deg", ParamValue::Number(45.0)),
+    ]));
+    let t = texts(&refr);
+    assert!(t.contains(&"θ₂ = 28.1°"), "{t:?}");
+    assert!(t.contains(&"n₁ sin θ₁ = n₂ sin θ₂"));
+    // Media are labelled by role: n₁ incident, n₂ transmitting.
+    assert!(t.contains(&"n₁ = 1.00"), "{t:?}");
+    assert!(t.contains(&"n₂ = 1.50"), "{t:?}");
+
+    // Glass -> air past the critical angle: no θ₂, only total internal
+    // reflection.
+    let past_critical = scene(&params(&[
+        ("setup", ParamValue::EnumChoice("refraction".into())),
+        ("angle_deg", ParamValue::Number(60.0)),
+        ("index_1", ParamValue::Number(1.5)),
+        ("index", ParamValue::Number(1.0)),
+    ]));
+    let t = texts(&past_critical);
+    assert!(t.contains(&"Total internal reflection"), "{t:?}");
+    assert!(!t.iter().any(|s| s.contains("θ₂")));
+
+    // The tir sweep states the ratio that defines the critical angle, and its
+    // n₁ is the incident (denser) slab, matching the refraction convention.
+    let tir = scene(&params(&[
+        ("setup", ParamValue::EnumChoice("tir".into())),
+        ("progress", ParamValue::Number(1.0)),
+        ("angle_deg", ParamValue::Number(45.0)),
+        ("index_1", ParamValue::Number(1.0)),
+        ("index", ParamValue::Number(1.5)),
+    ]));
+    let t = texts(&tir);
+    assert!(
+        t.iter()
+            .any(|s| s.contains("sin θc = n₂/n₁") && s.contains("41.8")),
+        "{t:?}"
+    );
+    assert!(t.contains(&"n₁ = 1.50"), "{t:?}");
+    assert!(t.contains(&"n₂ = 1.00"), "{t:?}");
+    assert!(t.contains(&"θ₁ = 45.0°"), "{t:?}");
+}
+
+#[test]
+fn mirror_curvature_maps_to_signed_focal_with_radius_floor() {
+    let u = 720.0;
+    // Concave (>= 0) focal is positive, convex negative, both R/2.
+    assert!((mirror_focal(30.0, u) - 0.15 * u).abs() < 1e-9);
+    assert!((mirror_focal(-30.0, u) + 0.15 * u).abs() < 1e-9);
+    // Radii below the 10% floor use the floored radius; zero is concave.
+    assert!((mirror_focal(5.0, u) - 0.05 * u).abs() < 1e-9);
+    assert!((mirror_focal(-5.0, u) + 0.05 * u).abs() < 1e-9);
+    assert!(mirror_focal(0.0, u) > 0.0);
+    assert!((mirror_focal(50.0, u) - 0.25 * u).abs() < 1e-9);
+    assert!((mirror_focal(-50.0, u) + 0.25 * u).abs() < 1e-9);
+}
+
+#[test]
+fn near_focus_images_scale_into_finite_on_canvas_coordinates() {
+    let size = Size {
+        width: 1280,
+        height: 720,
+    };
+    let cases: [(&str, Vec<ParamEntry>); 4] = [
+        (
+            // Converging lens a hair past f: a distant real image.
+            "lens-diagram far past f",
+            params(&[
+                ("setup", ParamValue::EnumChoice("lens-diagram".into())),
+                ("focal_length", ParamValue::Number(20.0)),
+                ("object_distance", ParamValue::Number(20.5)),
+            ]),
+        ),
+        (
+            // A hair inside f: a distant virtual image.
+            "lens-diagram just inside f",
+            params(&[
+                ("setup", ParamValue::EnumChoice("lens-diagram".into())),
+                ("focal_length", ParamValue::Number(20.0)),
+                ("object_distance", ParamValue::Number(19.5)),
+            ]),
+        ),
+        (
+            // Concave mirror with the object between C and F at the default
+            // height: |m| = 30, previously drawn as "beyond frame".
+            "mirror between C and F",
+            params(&[
+                ("setup", ParamValue::EnumChoice("mirror".into())),
+                ("object_distance", ParamValue::Number(15.5)),
+            ]),
+        ),
+        (
+            // Inside F with a tall object: |m| grows even larger.
+            "mirror inside F, tall object",
+            params(&[
+                ("setup", ParamValue::EnumChoice("mirror".into())),
+                ("object_distance", ParamValue::Number(14.5)),
+                ("object_height", ParamValue::Number(30.0)),
+            ]),
+        ),
+    ];
+    for (name, entries) in cases {
+        let rendered = render(&entries, size).unwrap_or_else(|e| panic!("{name}: {e:?}"));
+        assert_finite_and_on_canvas(&rendered, size);
+        assert!(!rendered.elements.is_empty(), "{name}");
+        // The auto-fit must keep magnified images on the diagram.
+        let labels = texts(&rendered);
+        assert!(
+            !labels.iter().any(|s| s.contains("beyond frame")),
+            "{name}: {labels:?}"
+        );
+    }
+}
+
+#[test]
 fn dispersion_index_and_spectrum_are_sane() {
     // 550 nm is the calibration point.
     assert!((crate::spectrum::index_at(1.5, 550.0) - 1.5).abs() < 1e-12);
@@ -194,6 +356,29 @@ fn dispersion_index_and_spectrum_are_sane() {
     let (rr, _rg, rb) = crate::spectrum::wavelength_rgb(680.0);
     assert!(vb > rb && vr < rr);
     assert!(crate::spectrum::wavelength_rgb(550.0).1 > 0);
+}
+
+#[test]
+fn dispersion_vanishes_at_index_one_and_scales_with_n_minus_one() {
+    // An index of 1 is vacuum: no dispersion at any wavelength.
+    for nm in [400.0, 450.0, 550.0, 620.0, 700.0] {
+        assert!(
+            (crate::spectrum::index_at(1.0, nm) - 1.0).abs() < 1e-12,
+            "{nm}"
+        );
+    }
+    // The Cauchy coefficient is calibrated BK7-like at n = 1.5
+    // (B = 0.004 µm²): n(400) - n(700) = 0.004 · (1/0.16 - 1/0.49).
+    let spread =
+        |base: f64| crate::spectrum::index_at(base, 400.0) - crate::spectrum::index_at(base, 700.0);
+    assert!((spread(1.5) - 0.004 * (1.0 / 0.16 - 1.0 / 0.49)).abs() < 1e-12);
+    // Weaker media disperse proportionally less, stronger ones more.
+    assert!(spread(1.2) > 0.0 && spread(1.2) < spread(1.5));
+    assert!(spread(1.9) > spread(1.5));
+    // The calibration point stays exact for every base.
+    for base in [1.0, 1.2, 1.5, 1.9, 2.5] {
+        assert!((crate::spectrum::index_at(base, 550.0) - base).abs() < 1e-12);
+    }
 }
 
 #[test]
