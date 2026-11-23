@@ -44,7 +44,7 @@ fn assert_finite_and_on_canvas(scene: &Scene, size: Size) {
             "non-finite {what} ({x}, {y})"
         );
         assert!(
-            x.abs() <= width * 1.01 && y.abs() <= height * 1.01,
+            (0.0..=width).contains(&x) && (0.0..=height).contains(&y),
             "off-canvas {what} ({x}, {y})"
         );
     };
@@ -56,14 +56,22 @@ fn assert_finite_and_on_canvas(scene: &Scene, size: Size) {
                         PathVerb::MoveTo(p) | PathVerb::LineTo(p) => {
                             ok(f64::from(p.x), f64::from(p.y), "path point")
                         }
-                        PathVerb::QuadTo((p, _)) | PathVerb::CubicTo((p, _, _)) => {
-                            ok(f64::from(p.x), f64::from(p.y), "control point")
+                        PathVerb::QuadTo((a, b)) => {
+                            for p in [a, b] {
+                                ok(f64::from(p.x), f64::from(p.y), "quadratic point");
+                            }
+                        }
+                        PathVerb::CubicTo((a, b, c)) => {
+                            for p in [a, b, c] {
+                                ok(f64::from(p.x), f64::from(p.y), "cubic point");
+                            }
                         }
                         PathVerb::Close => {}
                     }
                 }
             }
-            DrawCommand::TextRun(t) => ok(f64::from(t.x), f64::from(t.y), "text"),
+            // Painter::label stores the horizontal offset from canvas centre.
+            DrawCommand::TextRun(t) => ok(width / 2.0 + f64::from(t.x), f64::from(t.y), "text"),
         }
     }
 }
@@ -175,7 +183,7 @@ fn principal_rays_form_real_and_virtual_images_on_the_correct_side() {
             let height = 0.1;
             let (image_distance, magnification) = geom::conjugates(f, d).unwrap();
             let image = V::new(side * image_distance, magnification * height);
-            let rays = diagram::principal_rays(f, d, height, side);
+            let rays = diagram::principal_rays(f, d, height, side, Some(image.y));
             for ray in rays.iter().flatten() {
                 assert!(ray.outgoing.x * side > 0.0);
                 let to_image = image - ray.hit;
@@ -202,7 +210,7 @@ fn principal_rays_form_real_and_virtual_images_on_the_correct_side() {
             assert_eq!(focal.outgoing, V::new(side, 0.0));
         }
 
-        let [a, b, c] = diagram::principal_rays(0.2, 0.2, 0.1, side);
+        let [a, b, c] = diagram::principal_rays(0.2, 0.2, 0.1, side, None);
         assert_eq!(a.unwrap().outgoing, b.unwrap().outgoing);
         assert!(c.is_none());
     }
@@ -264,6 +272,46 @@ fn snell_and_critical_angle_labels_are_explicit() {
 }
 
 #[test]
+fn critical_angle_equation_stays_clear_of_the_ray_sweep() {
+    for step in 0..=100 {
+        let rendered = scene(&params(&[
+            ("setup", ParamValue::EnumChoice("tir".into())),
+            ("angle_deg", ParamValue::Number(89.0)),
+            ("progress", ParamValue::Number(f64::from(step) / 100.0)),
+        ]));
+        let Some(equation) = rendered.elements.iter().find_map(|element| match element {
+            DrawCommand::TextRun(text) if text.text.starts_with("sin θc") => Some(text),
+            _ => None,
+        }) else {
+            // The label fades in as the incident ray approaches the interface.
+            assert!(step < 28);
+            continue;
+        };
+        // Allow room for the centred equation's glyphs and padding.
+        let right = 640.0 + equation.x + 6.5 * equation.font_size;
+        let bottom = equation.y + 2.0 * equation.font_size;
+        for element in &rendered.elements {
+            let (path, color) = match element {
+                DrawCommand::StrokePath((path, style)) => (path, &style.color),
+                DrawCommand::FillPath((path, color)) => (path, color),
+                _ => continue,
+            };
+            if (color.r, color.g, color.b) != (255, 205, 66) {
+                continue;
+            }
+            let mut points = path.iter().filter_map(|verb| match verb {
+                PathVerb::MoveTo(point) | PathVerb::LineTo(point) => Some(point),
+                _ => None,
+            });
+            assert!(
+                points.clone().all(|p| p.x > right + 2.0) || points.all(|p| p.y > bottom + 2.0),
+                "ray enters the critical equation area at progress {step}%"
+            );
+        }
+    }
+}
+
+#[test]
 fn mirror_curvature_maps_to_signed_focal_with_radius_floor() {
     let u = 720.0;
     // Concave (>= 0) focal is positive, convex negative, both R/2.
@@ -283,54 +331,39 @@ fn near_focus_images_scale_into_finite_on_canvas_coordinates() {
         width: 1280,
         height: 720,
     };
-    let cases: [(&str, Vec<ParamEntry>); 4] = [
-        (
-            // Converging lens a hair past f: a distant real image.
-            "lens-diagram far past f",
-            params(&[
-                ("setup", ParamValue::EnumChoice("lens-diagram".into())),
-                ("focal_length", ParamValue::Number(20.0)),
-                ("object_distance", ParamValue::Number(20.5)),
-            ]),
-        ),
-        (
-            // A hair inside f: a distant virtual image.
-            "lens-diagram just inside f",
-            params(&[
-                ("setup", ParamValue::EnumChoice("lens-diagram".into())),
-                ("focal_length", ParamValue::Number(20.0)),
-                ("object_distance", ParamValue::Number(19.5)),
-            ]),
-        ),
-        (
-            // Concave mirror with the object between C and F at the default
-            // height: |m| = 30, previously drawn as "beyond frame".
-            "mirror between C and F",
-            params(&[
-                ("setup", ParamValue::EnumChoice("mirror".into())),
-                ("object_distance", ParamValue::Number(15.5)),
-            ]),
-        ),
-        (
-            // Inside F with a tall object: |m| grows even larger.
-            "mirror inside F, tall object",
-            params(&[
-                ("setup", ParamValue::EnumChoice("mirror".into())),
-                ("object_distance", ParamValue::Number(14.5)),
-                ("object_height", ParamValue::Number(30.0)),
-            ]),
-        ),
-    ];
-    for (name, entries) in cases {
-        let rendered = render(&entries, size).unwrap_or_else(|e| panic!("{name}: {e:?}"));
-        assert_finite_and_on_canvas(&rendered, size);
-        assert!(!rendered.elements.is_empty(), "{name}");
-        // The auto-fit must keep magnified images on the diagram.
-        let labels = texts(&rendered);
-        assert!(
-            !labels.iter().any(|s| s.contains("beyond frame")),
-            "{name}: {labels:?}"
-        );
+    let center = size.width as f32 / 2.0;
+    for (setup, focal_distance) in [("mirror", 15.0), ("lens-diagram", 20.0)] {
+        for (gap, height, expected) in [
+            (-0.5, 30.0, "Virtual image"),
+            (-0.00001, 15.0, "Virtual image"),
+            (0.00001, 15.0, "Real image"),
+            (0.5, 15.0, "Real image"),
+        ] {
+            let distance = focal_distance + gap;
+            let rendered = scene(&params(&[
+                ("setup", ParamValue::EnumChoice(setup.into())),
+                ("object_distance", ParamValue::Number(distance)),
+                ("object_height", ParamValue::Number(height)),
+            ]));
+            assert_finite_and_on_canvas(&rendered, size);
+            let labels = texts(&rendered);
+            assert!(
+                labels.contains(&expected),
+                "{setup} at {distance}: {labels:?}"
+            );
+            // The third principal ray leaves the element parallel to the axis.
+            assert!(
+                rendered.elements.iter().any(|element| matches!(
+                    element,
+                    DrawCommand::StrokePath((path, _))
+                        if matches!(path.as_slice(),
+                            [PathVerb::MoveTo(_), PathVerb::LineTo(hit), PathVerb::LineTo(end)]
+                            if hit.x == center && hit.y == end.y
+                                && if setup == "mirror" { end.x < hit.x } else { end.x > hit.x })
+                )),
+                "{setup} at {distance}: missing third ray"
+            );
+        }
     }
 }
 

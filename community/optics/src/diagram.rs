@@ -31,17 +31,21 @@ pub struct PrincipalRay {
 
 /// Object to the left, y up. `side` is +1 for transmission and -1 for
 /// reflection. Slopes are measured along the outgoing propagation axis.
-pub fn principal_rays(f: f64, distance: f64, height: f64, side: f64) -> [Option<PrincipalRay>; 3] {
-    let ray = |y, slope| {
-        Some(PrincipalRay {
-            hit: V::new(0.0, y),
-            outgoing: V::new(side, slope).unit(),
-        })
+pub fn principal_rays(
+    f: f64,
+    distance: f64,
+    height: f64,
+    side: f64,
+    image_height: Option<f64>,
+) -> [Option<PrincipalRay>; 3] {
+    let ray = |y, slope| PrincipalRay {
+        hit: V::new(0.0, y),
+        outgoing: V::new(side, slope).unit(),
     };
     [
-        ray(height, -height / f),
-        ray(0.0, -height / distance),
-        conjugates(f, distance).and_then(|(_, m)| ray(m * height, 0.0)),
+        Some(ray(height, -height / f)),
+        Some(ray(0.0, -height / distance)),
+        image_height.map(|y| ray(y, 0.0)),
     ]
 }
 
@@ -69,29 +73,17 @@ pub fn prism_beam(unit: f64, angle: f64) -> ([V; 3], V, V) {
 /// centre) ray, which hit the element at m·height, come back on screen. This
 /// is what keeps concave-mirror setups between C and F, or inside F, showing
 /// their (strongly magnified) image instead of dropping it.
-fn fit_conjugates(
-    f: f64,
-    distance: f64,
-    height: f64,
-    unit: f64,
-    half_width: f64,
-) -> (f64, f64, f64) {
-    let Some((d, m)) = conjugates(f, distance) else {
-        return (f, distance, height);
+fn conjugate_fit_divisor(image: Option<V>, unit: f64, half_width: f64) -> f64 {
+    let Some(point) = image else {
+        return 1.0;
     };
-    let tip = (m * height).abs();
     // 98% of the image-arrow guard in `principal`, so the scaled result can
     // never sit exactly on the cut-off; the ray budget is the 0.36·unit
     // aperture with its own margin.
-    let need = (d.abs() / (0.98 * (half_width - 0.075 * unit)))
-        .max(tip / (0.98 * 0.39 * unit))
-        .max(tip / (0.85 * 0.36 * unit))
-        .max(1.0);
-    if need > 1.0 {
-        (f / need, distance / need, height / need)
-    } else {
-        (f, distance, height)
-    }
+    (point.x.abs() / (0.98 * (half_width - 0.075 * unit)))
+        .max(point.y.abs() / (0.98 * 0.39 * unit))
+        .max(point.y.abs() / (0.85 * 0.36 * unit))
+        .max(1.0)
 }
 
 impl Diagram<'_> {
@@ -165,13 +157,16 @@ impl Diagram<'_> {
         let u = self.unit;
         let side = if mirror { -1.0 } else { 1.0 };
         let distance = distance.min(self.half_width - 0.10 * u);
-        let (f, distance, object_height) =
-            fit_conjugates(f, distance, object_height, u, self.half_width);
+        // Classify the conjugate at the original scale, before fitting can
+        // shrink the focal gap below the near-infinity tolerance.
+        let image = conjugates(f, distance).map(|(d, m)| V::new(side * d, m * object_height));
+        let fit = conjugate_fit_divisor(image, u, self.half_width);
+        let (f, distance, object_height) = (f / fit, distance / fit, object_height / fit);
         let object = V::new(-distance, 0.0);
         let tip = V::new(-distance, object_height);
-        let image = conjugates(f, distance).map(|(d, m)| (d, V::new(side * d, m * object_height)));
+        let image = image.map(|point| point / fit);
         let aperture = 0.36 * u;
-        let rays = principal_rays(f, distance, object_height, side);
+        let rays = principal_rays(f, distance, object_height, side, image.map(|p| p.y));
         let height = rays
             .iter()
             .flatten()
@@ -233,7 +228,7 @@ impl Diagram<'_> {
             let end = self.edge(ray.hit, ray.outgoing, 0.04 * u);
             let growth = phase(progress, start, finish);
             self.grow_ray(&[tip, ray.hit, end], growth, color, true);
-            if let Some((_, point)) = image.filter(|(d, _)| *d < 0.0) {
+            if let Some(point) = image.filter(|p| side * p.x < 0.0) {
                 let incoming_length = (tip - ray.hit).length();
                 let interaction = incoming_length / (incoming_length + (end - ray.hit).length());
                 let limit = self.edge(ray.hit, -ray.outgoing, 0.035 * u);
@@ -251,14 +246,15 @@ impl Diagram<'_> {
         }
 
         match image {
-            Some((d, point))
+            Some(point)
                 if point.x.abs() <= self.half_width - 0.075 * u && point.y.abs() <= 0.39 * u =>
             {
+                let real = side * point.x > 0.0;
                 let growth = phase(progress, 0.71, 0.88);
                 let base = V::new(point.x, 0.0);
                 let end = base.lerp(point, growth);
                 if growth > 0.0 {
-                    if d < 0.0 {
+                    if !real {
                         self.guide(base, end, image_color);
                     } else {
                         self.painter.stroke(&[base, end], self.width(), image_color);
@@ -272,14 +268,14 @@ impl Diagram<'_> {
                         image_color,
                     );
                 }
-                let (label, y) = if d > 0.0 {
+                let (label, y) = if real {
                     ("Real image", point.y - 0.062 * u)
                 } else if point.y < 0.09 * u && !mirror {
                     ("Virtual image", -0.114 * u)
                 } else {
                     ("Virtual image", point.y + 0.050 * u)
                 };
-                let x = if d > 0.0 {
+                let x = if real {
                     point.x - 0.105 * u * side
                 } else {
                     point.x
@@ -287,10 +283,10 @@ impl Diagram<'_> {
                 let x = x.clamp(-self.half_width + 0.132 * u, self.half_width - 0.132 * u);
                 self.label(label, V::new(x, y), labels);
             }
-            // Defensive: fit_conjugates scales finite conjugates inside the
+            // Defensive: fitting scales finite conjugates inside the
             // guard above, so this arm only catches a future regression.
-            Some((d, _)) => self.label(
-                if d < 0.0 {
+            Some(point) => self.label(
+                if side * point.x < 0.0 {
                     "Virtual image beyond frame"
                 } else {
                     "Real image beyond frame"
@@ -518,9 +514,10 @@ impl Diagram<'_> {
                 hit - V::new(s, c) * (0.22 * u * markers),
                 self.palette.marker.with_alpha(0.72),
             );
+            // Above the slab and left of the hit, outside both ray sweeps.
             self.label(
                 &format!("sin θc = n₂/n₁ → θc = {}°", fmt(critical.to_degrees(), 1)),
-                V::new(0.24 * u, 0.29 * u),
+                V::new(-0.28 * u, 0.36 * u),
                 markers,
             );
         }

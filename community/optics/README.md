@@ -31,7 +31,7 @@ independently.
 | `lens-diagram` | Parallel, optical-centre and focal rays for a converging or diverging thin lens, with F/2F markers and the object and image arrows. |
 | `mirror` | Parallel, vertex and focal rays for a concave or convex mirror, with its focal point F and centre of curvature C. |
 | `refraction` | Transmission through a parallel slab, incidence and transmission angles measured from the normal, and Snell's equation. The exit ray is parallel to the incident ray when both faces transmit. |
-| `tir` | An angle sweep from the lower medium into the upper medium, with the critical angle marked when one exists. Media follow the same convention as `refraction`: n₁ is the medium the ray starts in (the slab, labelled below the interface) and n₂ the one it would transmit into, with `sin θc = n₂/n₁` shown next to the marked critical direction. The reflected branch below that threshold uses schematic brightness. |
+| `tir` | An angle sweep from the lower medium into the upper medium, with the critical angle marked when one exists. Media follow the same convention as `refraction`: n₁ is the medium the ray starts in (the slab, labelled below the interface) and n₂ the one it would transmit into, with `sin θc = n₂/n₁` shown above the interface, clear of the ray sweep. The reflected branch below that threshold uses schematic brightness. |
 | `dispersion` | An incident white beam in air and wavelength-dependent refraction through an equilateral prism. Shorter wavelengths have higher indices and, in the default setup, bend farther toward the base. |
 
 Real images are where solid outgoing rays converge. Virtual images use dashed
