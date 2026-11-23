@@ -1,0 +1,7 @@
+api_version = "1.1.0"
+id = "io.github.animathio.physics"
+name = "Physics Play"
+version = "0.1.0"
+description = "Deterministic 2D mechanics demos: projectile, pendulum, spring, collisions and falling stacks"
+kinds = ["clip-source"]
+capabilities = []

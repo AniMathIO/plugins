@@ -23,6 +23,16 @@
       "min_abi": "1.1.0"
     },
     {
+      "id": "io.github.animathio.physics",
+      "name": "Physics Play",
+      "author": "AniMathIO",
+      "description": "Deterministic 2D mechanics demos: projectile, pendulum, spring, collisions and falling stacks",
+      "repo": "AniMathIO/plugins",
+      "path": "community/physics",
+      "license": "MIT",
+      "min_abi": "1.1.0"
+    },
+    {
       "id": "io.github.animathio.optics",
       "name": "Ray Optics",
       "author": "AniMathIO",
