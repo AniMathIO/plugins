@@ -41,6 +41,25 @@
       "released_at": "2026-11-23T09:05:41Z"
     },
     {
+      "id": "io.github.animathio.network",
+      "name": "Net Lab",
+      "author": "AniMathIO",
+      "description": "Animate ARP, ICMP ping, TCP, DHCP, DNS and traceroute over teaching topologies",
+      "license": "MIT",
+      "repo": "AniMathIO/plugins",
+      "path": "community/network",
+      "source_url": "https://github.com/AniMathIO/plugins/tree/HEAD/community/network",
+      "kinds": [
+        "clip-source"
+      ],
+      "min_abi": "1.1.0",
+      "version": "1.0.0",
+      "download_url": "https://github.com/AniMathIO/plugins/releases/download/io.github.animathio.network%401.0.0/io.github.animathio.network-1.0.0.amplugin",
+      "sha256": "04f0d98271a5a27e218e47eb4bf89365a3a89cb0032e25c16f2d732cd0ffa0fc",
+      "size": 72673,
+      "released_at": "2026-11-23T09:07:07Z"
+    },
+    {
       "id": "io.github.animathio.optics",
       "name": "Ray Optics",
       "author": "AniMathIO",
