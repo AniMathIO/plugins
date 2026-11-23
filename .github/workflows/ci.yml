@@ -71,6 +71,10 @@ jobs:
         env:
           ANIMATHIO_CLI: ${{ steps.host-2-3-0.outputs.cli }}
         run: python3 community/network/smoke.py "$ANIMATHIO_CLI" target/plugins
+      - name: Test Physics Play on released 2.3.0
+        env:
+          ANIMATHIO_CLI: ${{ steps.host-2-3-0.outputs.cli }}
+        run: python3 community/physics/smoke.py "$ANIMATHIO_CLI" target/plugins
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: plugins

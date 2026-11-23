@@ -1,0 +1,23 @@
+Physics Play for AniMathIO
+Copyright (c) 2026 AniMathIO contributors. MIT (see ../../LICENSE).
+
+Scene inspiration
+manim-physics, Matheart and contributors
+https://github.com/Matheart/manim-physics/tree/d37580e07ac67d06c8dfbb78804b8a0256d1502b
+Copyright (c) 2021 Matheart and manim-physics contributors.
+MIT License, reproduced in assets/manim-physics-LICENSE.
+
+Studied the rigid mechanics examples and pendulum demo for the scene ideas.
+Physics Play implements its vector drawings, projectile and spring formulas,
+nonlinear pendulum, and disk and domino contact models in Rust. No manim-physics
+source, artwork, Python, Manim or pymunk is incorporated.
+
+WASM feasibility spike
+Rapier (rapier2d 0.36.1, commit 3406750a38286a0d3c7d0f4be2f9d53153e81d90)
+https://github.com/dimforge/rapier/tree/v0.36.1
+Apache License 2.0.
+
+Evaluated Rapier with enhanced-determinism for disk and domino contacts in the
+AniMathIO WASM sandbox. The prototype built and rendered short scenes, but
+trapped when replaying its largest 30-second scenes. The released component
+uses an original bounded solver and neither bundles nor links Rapier or Parry.
