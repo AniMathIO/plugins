@@ -3,8 +3,8 @@
 
 use super::*;
 use crate::animathio::plugin::types::DrawCommand;
-use crate::scenario::{Event, Proto, Scenario};
-use crate::topology::{topology, Topology, CLIENT, SERVER};
+use crate::scenario::{Event, Proto, Scenario, TableKind};
+use crate::topology::{topology, Topology, CLIENT, PEER, SERVER};
 
 fn pv(id: &str, value: ParamValue) -> ParamEntry {
     ParamEntry {
@@ -284,6 +284,157 @@ fn tables_start_empty() {
         assert!(state.mac.is_empty() && state.arp.is_empty());
         assert!(state.last_event().is_none());
     }
+}
+
+#[test]
+fn switch_flood_notes_match_the_number_of_egress_ports() {
+    for routed in [false, true] {
+        let topo = topology(routed, false);
+        let events = crate::scenario::build(Scenario::Tcp, topo);
+        let flood = events
+            .iter()
+            .find(|event| event.note.starts_with("Unknown MAC"))
+            .expect("the first TCP SYN floods the switch");
+        assert_eq!(flood.from, topo.switch());
+        let other_ports = topo.neighbors(topo.switch()).count() - 1;
+        assert_eq!(flood.legs.len(), other_ports);
+        assert_eq!(
+            flood.note,
+            if routed {
+                "Unknown MAC: flood to the only other port"
+            } else {
+                "Unknown MAC: flood to every other port"
+            }
+        );
+    }
+}
+
+#[test]
+fn auto_table_matches_the_scenario_and_topology() {
+    let single = topology(false, false);
+    let routed = topology(true, false);
+    assert_eq!(Scenario::Ping.auto_table(single), TableKind::Arp);
+    assert_eq!(Scenario::Ping.auto_table(routed), TableKind::Arp);
+    assert_eq!(
+        Scenario::Dns.auto_table(topology(true, true)),
+        TableKind::Arp
+    );
+    assert_eq!(Scenario::Traceroute.auto_table(routed), TableKind::Route);
+    assert_eq!(
+        Scenario::Traceroute.auto_table(single),
+        TableKind::Mac,
+        "single-switch traceroute has no router to route with"
+    );
+    for topo in [single, routed] {
+        for scenario in [Scenario::Arp, Scenario::Tcp, Scenario::Dhcp] {
+            assert_eq!(scenario.auto_table(topo), TableKind::Mac);
+        }
+    }
+}
+
+#[test]
+fn auto_traceroute_table_on_one_switch_shows_mac_learning() {
+    let size = Size {
+        width: 1280,
+        height: 720,
+    };
+    let texts = |params: &[ParamEntry]| -> Vec<String> {
+        render(params, size)
+            .unwrap()
+            .elements
+            .iter()
+            .filter_map(|element| match element {
+                DrawCommand::TextRun(run) => Some(run.text.clone()),
+                _ => None,
+            })
+            .collect()
+    };
+    let single = render_params(&[
+        ("scenario", ParamValue::EnumChoice("traceroute".into())),
+        ("topology", ParamValue::EnumChoice("single-switch".into())),
+    ]);
+    let titles = texts(&single);
+    assert!(titles.iter().any(|t| t == "Switch MAC table"));
+    assert!(titles.iter().any(|t| t.contains("02:11:22:33:44:01")));
+    let routed = render_params(&[
+        ("scenario", ParamValue::EnumChoice("traceroute".into())),
+        ("topology", ParamValue::EnumChoice("through-router".into())),
+    ]);
+    assert!(texts(&routed).iter().any(|t| t == "Router routing table"));
+    // The manual choice still names the absent router honestly.
+    let manual = render_params(&[
+        ("scenario", ParamValue::EnumChoice("traceroute".into())),
+        ("topology", ParamValue::EnumChoice("single-switch".into())),
+        ("table", ParamValue::EnumChoice("route".into())),
+    ]);
+    assert!(texts(&manual).iter().any(|t| t == "No router on this LAN"));
+}
+
+#[test]
+fn traceroute_notes_the_server_arrival_inside_the_flood() {
+    let single = topology(false, false);
+    let events = crate::scenario::build(Scenario::Traceroute, single);
+    let arrival = events
+        .iter()
+        .find(|event| event.note == "Server receives the probe with TTL 1")
+        .expect("single-switch trace notes the server's arrival");
+    assert!(
+        arrival.legs.contains(&SERVER),
+        "the note rides the server leg"
+    );
+    // The same flood also copies the probe to PC2.
+    assert!(arrival.legs.contains(&PEER));
+    assert_eq!(arrival.ttl, Some(1));
+    let routed = topology(true, false);
+    let events = crate::scenario::build(Scenario::Traceroute, routed);
+    assert!(
+        events
+            .iter()
+            .all(|event| event.note != "Server receives the probe with TTL 1"),
+        "routed hops are unicast; the forward note covers arrival"
+    );
+    let forward = events
+        .iter()
+        .find(|event| event.note == "Router forwards with TTL 1")
+        .expect("router forward note");
+    assert!(forward.legs.contains(&SERVER));
+    assert_eq!(forward.ttl, Some(1));
+}
+
+#[test]
+fn enum_params_reject_wrong_types_like_bad_strings() {
+    let size = Size {
+        width: 1280,
+        height: 720,
+    };
+    let message = |params: &[ParamEntry]| {
+        render(params, size)
+            .expect_err("a bad value must be rejected")
+            .message
+    };
+    let expected = "Unsupported topology. Expected one of single-switch, through-router";
+    assert_eq!(
+        message(&[pv("topology", ParamValue::EnumChoice("token-ring".into()))]),
+        expected
+    );
+    assert_eq!(
+        message(&[pv("topology", ParamValue::Number(2.0))]),
+        expected
+    );
+    assert_eq!(message(&[pv("topology", ParamValue::Bool(true))]), expected);
+    let expected = "Unsupported scenario. Expected one of ping, arp, tcp, dhcp, dns, traceroute";
+    assert_eq!(
+        message(&[pv("scenario", ParamValue::EnumChoice("ospf".into()))]),
+        expected
+    );
+    assert_eq!(
+        message(&[pv("scenario", ParamValue::String("ospf".into()))]),
+        expected
+    );
+    assert_eq!(
+        message(&[pv("scenario", ParamValue::Number(7.0))]),
+        expected
+    );
 }
 
 #[test]

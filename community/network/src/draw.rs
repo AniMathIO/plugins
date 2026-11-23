@@ -307,7 +307,7 @@ fn proto_color(proto: Proto) -> Color {
     Color { r, g, b, a: 255 }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct Rect {
     x: f32,
     y: f32,
@@ -316,6 +316,38 @@ struct Rect {
 }
 
 impl Rect {
+    fn centered(x: f32, y: f32, w: f32, h: f32) -> Self {
+        Self {
+            x: x - w * 0.5,
+            y: y - h * 0.5,
+            w,
+            h,
+        }
+    }
+
+    fn padded(self, pad: f32) -> Self {
+        Self {
+            x: self.x - pad,
+            y: self.y - pad,
+            w: self.w + 2.0 * pad,
+            h: self.h + 2.0 * pad,
+        }
+    }
+
+    fn overlaps(self, other: Self) -> bool {
+        self.x < other.right()
+            && other.x < self.right()
+            && self.y < other.bottom()
+            && other.y < self.bottom()
+    }
+
+    fn contains(self, other: Self) -> bool {
+        self.x <= other.x
+            && self.y <= other.y
+            && self.right() >= other.right()
+            && self.bottom() >= other.bottom()
+    }
+
     fn right(self) -> f32 {
         self.x + self.w
     }
@@ -344,7 +376,7 @@ fn empty_row(label: &str) -> TableRow {
 /// Table panel content for the effective table kind.
 fn table_rows(input: &DrawInput, state: &TableState) -> (&'static str, Vec<TableRow>) {
     let kind = match input.table_kind {
-        TableKind::Auto => input.scenario.auto_table(),
+        TableKind::Auto => input.scenario.auto_table(input.topo),
         other => other,
     };
     match kind {
@@ -414,28 +446,41 @@ fn panel(p: &mut Painter, rect: Rect, short: f32) {
     );
 }
 
+fn glyph_body(cx: f32, cy: f32, kind: DeviceKind, icon: f32) -> (Rect, f32) {
+    let (width, height, center_y, corners) = match kind {
+        DeviceKind::Host => (0.92, 0.64, -0.14, 0.07),
+        DeviceKind::Switch => (1.20, 0.44, 0.0, 0.09),
+        DeviceKind::Router => (1.10, 0.84, 0.0, 0.20),
+        DeviceKind::Server => (0.68, 1.08, 0.0, 0.08),
+    };
+    (
+        Rect::centered(cx, cy + center_y * icon, width * icon, height * icon),
+        corners * icon,
+    )
+}
+
+fn glyph_stroke(short: f32) -> f32 {
+    (0.004 * short).max(1.0)
+}
+
+fn glyph_bounds(cx: f32, cy: f32, kind: DeviceKind, icon: f32, short: f32) -> Rect {
+    let (body, _) = glyph_body(cx, cy, kind, icon);
+    let mut bounds = body.padded(glyph_stroke(short) * 0.5);
+    if kind == DeviceKind::Host {
+        // Include the monitor stand and the round cap of its base.
+        bounds.h = bounds.h.max(cy + (0.34 + 0.035 / 2.0) * icon - bounds.y);
+    }
+    bounds
+}
+
 /// Vector device glyph, drawn from scratch (original artwork; see NOTICE).
 fn glyph(p: &mut Painter, cx: f32, cy: f32, kind: DeviceKind, s: f32, short: f32, accent: Color) {
-    let stroke_w = (0.004 * short).max(1.0);
+    let (body, corners) = glyph_body(cx, cy, kind, s);
+    let Rect { x, y, w, h } = body;
+    p.fill_round(x, y, w, h, corners, DEVICE_FILL);
+    p.stroke_round(x, y, w, h, corners, glyph_stroke(short), DEVICE_STROKE);
     match kind {
         DeviceKind::Host => {
-            p.fill_round(
-                cx - 0.46 * s,
-                cy - 0.46 * s,
-                0.92 * s,
-                0.64 * s,
-                0.07 * s,
-                DEVICE_FILL,
-            );
-            p.stroke_round(
-                cx - 0.46 * s,
-                cy - 0.46 * s,
-                0.92 * s,
-                0.64 * s,
-                0.07 * s,
-                stroke_w,
-                DEVICE_STROKE,
-            );
             p.fill_round(
                 cx - 0.11 * s,
                 cy + 0.18 * s,
@@ -454,23 +499,6 @@ fn glyph(p: &mut Painter, cx: f32, cy: f32, kind: DeviceKind, s: f32, short: f32
             );
         }
         DeviceKind::Switch => {
-            p.fill_round(
-                cx - 0.60 * s,
-                cy - 0.22 * s,
-                1.20 * s,
-                0.44 * s,
-                0.09 * s,
-                DEVICE_FILL,
-            );
-            p.stroke_round(
-                cx - 0.60 * s,
-                cy - 0.22 * s,
-                1.20 * s,
-                0.44 * s,
-                0.09 * s,
-                stroke_w,
-                DEVICE_STROKE,
-            );
             p.arrow(
                 cx - 0.40 * s,
                 cy - 0.10 * s,
@@ -489,23 +517,6 @@ fn glyph(p: &mut Painter, cx: f32, cy: f32, kind: DeviceKind, s: f32, short: f32
             );
         }
         DeviceKind::Router => {
-            p.fill_round(
-                cx - 0.55 * s,
-                cy - 0.42 * s,
-                1.10 * s,
-                0.84 * s,
-                0.20 * s,
-                DEVICE_FILL,
-            );
-            p.stroke_round(
-                cx - 0.55 * s,
-                cy - 0.42 * s,
-                1.10 * s,
-                0.84 * s,
-                0.20 * s,
-                stroke_w,
-                DEVICE_STROKE,
-            );
             p.arrow(
                 cx - 0.36 * s,
                 cy - 0.16 * s,
@@ -524,23 +535,6 @@ fn glyph(p: &mut Painter, cx: f32, cy: f32, kind: DeviceKind, s: f32, short: f32
             );
         }
         DeviceKind::Server => {
-            p.fill_round(
-                cx - 0.34 * s,
-                cy - 0.54 * s,
-                0.68 * s,
-                1.08 * s,
-                0.08 * s,
-                DEVICE_FILL,
-            );
-            p.stroke_round(
-                cx - 0.34 * s,
-                cy - 0.54 * s,
-                0.68 * s,
-                1.08 * s,
-                0.08 * s,
-                stroke_w,
-                DEVICE_STROKE,
-            );
             p.line(
                 cx - 0.20 * s,
                 cy - 0.30 * s,
@@ -576,19 +570,82 @@ struct PacketStyle {
     short: f32,
 }
 
-/// One packet glyph (possibly with speed lines) travelling `from → leg`.
-fn packet(
-    p: &mut Painter,
-    centers: &[(f32, f32)],
-    from: u8,
-    leg: u8,
+fn packet_style(input: &DrawInput, rect: Rect, short: f32) -> PacketStyle {
+    PacketStyle {
+        labels: input.labels,
+        speed_lines: input.speed_lines,
+        base: (short * input.packet_percent / 100.0).min(rect.w * 0.06),
+        short,
+    }
+}
+
+struct Packet {
+    px: f32,
+    py: f32,
+    radius: f32,
+    plate: Option<Rect>,
+    label: String,
+    font: f32,
+}
+
+fn packet_geometry(
+    (ax, ay): (f32, f32),
+    (bx, by): (f32, f32),
     t: f32,
     event: &Event,
     style: &PacketStyle,
+) -> Packet {
+    let px = lerp(ax, bx, t);
+    let py = lerp(ay, by, t);
+    if style.labels == Labels::None {
+        return Packet {
+            px,
+            py,
+            radius: style.base * 0.62,
+            plate: None,
+            label: String::new(),
+            font: 0.0,
+        };
+    }
+
+    let radius = style.base * 0.34;
+    let base = if style.labels == Labels::Full {
+        event.proto.full()
+    } else {
+        event.proto.short()
+    };
+    let label = match event.ttl {
+        Some(ttl) => format!("{base} · TTL {ttl}"),
+        None => base.to_string(),
+    };
+    let font = style.base.min(style.short * 0.034) * 0.68;
+    let width = (label.chars().count() as f32 * 0.62 + 1.5) * font;
+    let height = font * 2.04;
+    let bottom = py - radius - style.short * 0.007;
+    Packet {
+        px,
+        py,
+        radius,
+        plate: Some(Rect::centered(px, bottom - height * 0.5, width, height)),
+        label,
+        font,
+    }
+}
+
+fn packet_rim(short: f32) -> f32 {
+    short * 0.0016
+}
+
+/// One packet glyph (possibly with speed lines) travelling `from → leg`.
+fn packet(
+    p: &mut Painter,
+    (ax, ay): (f32, f32),
+    (bx, by): (f32, f32),
+    t: f32,
+    proto: Proto,
+    style: &PacketStyle,
+    shape: &Packet,
 ) {
-    let proto = event.proto;
-    let (ax, ay) = centers[from as usize];
-    let (bx, by) = centers[leg as usize];
     let fill = proto_color(proto);
     if style.speed_lines && t > 0.14 {
         let (t0, t1, t2) = (
@@ -613,48 +670,27 @@ fn packet(
             Painter::with_alpha(fill, 0.22),
         );
     }
-    let px = lerp(ax, bx, t);
-    let py = lerp(ay, by, t);
-    let radius = style.base
-        * if style.labels == Labels::None {
-            0.62
-        } else {
-            0.34
-        };
-    p.fill_circle(px, py, radius + style.short * 0.0016, PACKET_EDGE);
-    p.fill_circle(px, py, radius, fill);
-    if style.labels == Labels::None {
+    let (px, py) = (shape.px, shape.py);
+    let edge = packet_rim(style.short);
+    p.fill_circle(px, py, shape.radius + edge, PACKET_EDGE);
+    p.fill_circle(px, py, shape.radius, fill);
+    let Some(plate) = shape.plate else {
         return;
-    }
-    let label = if style.labels == Labels::Full {
-        proto.full()
-    } else {
-        proto.short()
     };
-    let label = if let Some(ttl) = event.ttl {
-        format!("{label} · TTL {ttl}")
-    } else {
-        label.into()
-    };
-    let font = style.base.min(style.short * 0.034) * 0.68;
-    let est_w = label.chars().count() as f32 * 0.62 * font + font * 1.5;
-    let ph = font * 2.04;
-    let label_y = py - radius - ph * 0.5 - style.short * 0.007;
-    let edge = style.short * 0.0016;
     p.fill_round(
-        px - est_w * 0.5,
-        label_y - ph * 0.5,
-        est_w,
-        ph,
-        ph * 0.30,
+        plate.x,
+        plate.y,
+        plate.w,
+        plate.h,
+        plate.h * 0.30,
         PACKET_EDGE,
     );
     p.fill_round(
-        px - est_w * 0.5 + edge,
-        label_y - ph * 0.5 + edge,
-        est_w - edge * 2.0,
-        ph - edge * 2.0,
-        ph * 0.26,
+        plate.x + edge,
+        plate.y + edge,
+        plate.w - edge * 2.0,
+        plate.h - edge * 2.0,
+        plate.h * 0.26,
         Painter::with_alpha(fill, 0.94),
     );
     let (r, g, b) = proto.rgba();
@@ -664,7 +700,13 @@ fn packet(
     } else {
         PACKET_TEXT_LIGHT
     };
-    p.text_center(&label, px, label_y + font * 0.36, font, text);
+    p.text_center(
+        &shape.label,
+        px,
+        plate.y + plate.h * 0.5 + shape.font * 0.36,
+        shape.font,
+        text,
+    );
 }
 
 fn text_fit(
@@ -680,6 +722,111 @@ fn text_fit(
     p.text_left(&truncate(text, chars), x, baseline, font, color);
 }
 
+struct DiagramMetrics {
+    icon: f32,
+    em: f32,
+    tick: f32,
+    port_font: f32,
+}
+
+fn device_centers(topo: &Topology, rect: Rect) -> Vec<(f32, f32)> {
+    topo.anchors
+        .iter()
+        .map(|&(x, y)| (rect.x + x * rect.w, rect.y + y * rect.h))
+        .collect()
+}
+
+fn diagram_metrics(rect: Rect, short: f32) -> DiagramMetrics {
+    let icon = (short * 0.112).min(rect.w * 0.14).min(rect.h * 0.19);
+    let em = (short * 0.025).min(rect.w * 0.032);
+    DiagramMetrics {
+        icon,
+        em,
+        tick: icon * 0.11,
+        port_font: em * 0.67,
+    }
+}
+
+struct LinkTicks {
+    a: (f32, f32),
+    b: (f32, f32),
+    along: (f32, f32),
+    normal: (f32, f32),
+    label_travel: f32,
+}
+
+fn link_ticks((ax, ay): (f32, f32), (bx, by): (f32, f32), icon: f32) -> LinkTicks {
+    let (dx, dy) = (bx - ax, by - ay);
+    let len = dx.hypot(dy);
+    let (ux, uy) = (dx / len.max(f32::EPSILON), dy / len.max(f32::EPSILON));
+    let inset = (icon * 0.68).min(len * 0.35);
+    // The pill sits above the wire. Put labels below it, or to the right
+    // when the wire runs vertically.
+    let normal = if dx == 0.0 {
+        (1.0, 0.0)
+    } else {
+        (-uy * dx.signum(), ux.abs())
+    };
+    LinkTicks {
+        a: (ax + ux * inset, ay + uy * inset),
+        b: (bx - ux * inset, by - uy * inset),
+        along: (ux, uy),
+        normal,
+        label_travel: len * 0.49 - inset,
+    }
+}
+
+fn port_label_bounds(label: &str, x: f32, baseline: f32, font: f32) -> Rect {
+    // Allow for the host's text metrics and antialiasing.
+    let width = label.chars().count() as f32 * 0.62 * font;
+    Rect::centered(x, baseline - font * 0.325, width, font * 1.35).padded(font * 0.2)
+}
+
+fn place_port_label(
+    tick: (f32, f32),
+    toward: f32,
+    ticks: &LinkTicks,
+    text: &str,
+    font: f32,
+    diagram: Rect,
+    obstacles: &[Rect],
+) -> Option<(f32, f32, Rect)> {
+    let (tx, ty) = tick;
+    let (nx, ny) = ticks.normal;
+    let (ux, uy) = ticks.along;
+    let bounds = port_label_bounds(text, 0.0, 0.0, font);
+    let clearance = (nx.abs() * bounds.w + ny.abs() * bounds.h) * 0.5 + font * 0.8;
+
+    // Stay near the tick, moving along the wire before moving farther away.
+    // Either side of a vertical link can clear the pill above the packet.
+    let sides: &[f32] = if ux == 0.0 { &[1.0, -1.0] } else { &[1.0] };
+    let nudges = [0, 1, 2, 3, 4, 5, 6, -1, -2, -3, -4];
+    let step = ticks.label_travel.min(font * 6.0) / 6.0;
+    for offset in 0..=6 {
+        for &side in sides {
+            let away = side * (clearance + offset as f32 * font * 0.75);
+            for nudge in nudges {
+                let along = nudge as f32 * step * toward;
+                let x = tx + nx * away + ux * along;
+                let baseline = ty + ny * away + uy * along + font * 0.325;
+                let bounds = port_label_bounds(text, x, baseline, font);
+                if diagram.contains(bounds)
+                    && !obstacles.iter().any(|obstacle| bounds.overlaps(*obstacle))
+                {
+                    return Some((x, baseline, bounds));
+                }
+            }
+        }
+    }
+    None
+}
+
+fn packet_obstacles(packet: &Packet, short: f32) -> impl Iterator<Item = Rect> {
+    let diameter = (packet.radius + packet_rim(short)) * 2.0;
+    let dot = Rect::centered(packet.px, packet.py, diameter, diameter);
+    std::iter::once(dot).chain(packet.plate)
+}
+
 fn draw_diagram(
     p: &mut Painter,
     input: &DrawInput,
@@ -689,16 +836,32 @@ fn draw_diagram(
     short: f32,
 ) {
     panel(p, rect, short);
-    let centers: Vec<_> = input
-        .topo
-        .anchors
-        .iter()
-        .map(|&(x, y)| (rect.x + x * rect.w, rect.y + y * rect.h))
-        .collect();
-    let icon = (short * 0.112).min(rect.w * 0.14).min(rect.h * 0.19);
-    let em = (short * 0.025).min(rect.w * 0.032);
-    let tick = icon * 0.11;
-    let port_font = em * 0.67;
+    let centers = device_centers(input.topo, rect);
+    let metrics = diagram_metrics(rect, short);
+    let style = packet_style(input, rect, short);
+    let mut obstacles = Vec::new();
+    if input.labels == Labels::Full {
+        obstacles.extend(
+            input
+                .topo
+                .devices
+                .iter()
+                .zip(&centers)
+                .map(|(device, &(cx, cy))| glyph_bounds(cx, cy, device.kind, metrics.icon, short)),
+        );
+    }
+    let mut packets = Vec::new();
+    if let Some((event, phase)) = active {
+        let from = centers[usize::from(event.from)];
+        for &leg in &event.legs {
+            let to = centers[usize::from(leg)];
+            let shape = packet_geometry(from, to, phase, event, &style);
+            if input.labels == Labels::Full {
+                obstacles.extend(packet_obstacles(&shape, short));
+            }
+            packets.push((from, to, shape));
+        }
+    }
     for link in input.topo.links {
         let (ax, ay) = centers[usize::from(link.a)];
         let (bx, by) = centers[usize::from(link.b)];
@@ -712,27 +875,25 @@ fn draw_diagram(
             (0.0021, LINK_COLOR)
         };
         p.line(ax, ay, bx, by, width * short, color);
-        let (dx, dy) = (bx - ax, by - ay);
-        let len = (dx * dx + dy * dy).sqrt().max(1.0);
-        let (ux, uy) = (dx / len, dy / len);
-        let tick_a = (ax + ux * icon * 0.68, ay + uy * icon * 0.68);
-        let tick_b = (bx - ux * icon * 0.68, by - uy * icon * 0.68);
-        for ((tx, ty), label, along) in [(tick_a, link.a_port, 1.0), (tick_b, link.b_port, -1.0)] {
+        let ticks = link_ticks((ax, ay), (bx, by), metrics.icon);
+        for (tick, text, toward) in [(ticks.a, link.a_port, 1.0), (ticks.b, link.b_port, -1.0)] {
+            let (tx, ty) = tick;
             p.fill_round(
-                tx - tick / 2.0,
-                ty - tick / 2.0,
-                tick,
-                tick,
-                tick * 0.25,
+                tx - metrics.tick / 2.0,
+                ty - metrics.tick / 2.0,
+                metrics.tick,
+                metrics.tick,
+                metrics.tick * 0.25,
                 color,
             );
             if input.labels == Labels::Full {
-                let (lx, ly) = if dy.abs() > dx.abs() {
-                    (tx + port_font * 2.0, ty + port_font * 0.35)
-                } else {
-                    (tx + ux * port_font * 0.95 * along, ty - port_font * 0.85)
-                };
-                p.text_center(label, lx, ly, port_font, PORT_TEXT);
+                let font = metrics.port_font;
+                if let Some((x, baseline, bounds)) =
+                    place_port_label(tick, toward, &ticks, text, font, rect, &obstacles)
+                {
+                    p.text_center(text, x, baseline, font, PORT_TEXT);
+                    obstacles.push(bounds);
+                }
             }
         }
     }
@@ -740,7 +901,7 @@ fn draw_diagram(
     if let Some((event, phase)) = active {
         if event.broadcast {
             let (cx, cy) = centers[usize::from(event.from)];
-            let radius = lerp(0.58, 1.45, phase) * icon;
+            let radius = lerp(0.58, 1.45, phase) * metrics.icon;
             p.dashed_circle(
                 cx,
                 cy,
@@ -754,34 +915,28 @@ fn draw_diagram(
     for (i, device) in input.topo.devices.iter().enumerate() {
         let (cx, cy) = centers[i];
         let facing = input.topo.label_above[i];
-        glyph(p, cx, cy, device.kind, icon, short, input.accent);
+        glyph(p, cx, cy, device.kind, metrics.icon, short, input.accent);
         let (name_y, ip_y) = if facing {
-            let name_y = cy - icon * 0.58 - em * 0.7;
-            (name_y, name_y - em * 1.13)
+            let name_y = cy - metrics.icon * 0.58 - metrics.em * 0.7;
+            (name_y, name_y - metrics.em * 1.13)
         } else {
-            let name_y = cy + icon * 0.61 + em * 0.85;
-            (name_y, name_y + em * 1.06)
+            let name_y = cy + metrics.icon * 0.61 + metrics.em * 0.85;
+            (name_y, name_y + metrics.em * 1.06)
         };
-        p.text_center(device.name, cx, name_y, em, TEXT_BRIGHT);
+        p.text_center(device.name, cx, name_y, metrics.em, TEXT_BRIGHT);
         let address = if i == usize::from(CLIENT) && input.scenario == Scenario::Dhcp && !leased {
             "Awaiting lease"
         } else {
             device.ip
         };
         if input.labels != Labels::None {
-            p.text_center(address, cx, ip_y, em * 0.78, TEXT_DIM);
+            p.text_center(address, cx, ip_y, metrics.em * 0.78, TEXT_DIM);
         }
     }
 
     if let Some((event, phase)) = active {
-        let style = PacketStyle {
-            labels: input.labels,
-            speed_lines: input.speed_lines,
-            base: (short * input.packet_percent / 100.0).min(rect.w * 0.06),
-            short,
-        };
-        for &leg in &event.legs {
-            packet(p, &centers, event.from, leg, phase, event, &style);
+        for (from, to, shape) in &packets {
+            packet(p, *from, *to, phase, event.proto, &style, shape);
         }
     }
 }
@@ -932,8 +1087,18 @@ fn draw_steps(
     }
 }
 
-pub fn draw(input: &DrawInput, size: &Size) -> Scene {
-    let (w, h) = (size.width as f32, size.height as f32);
+struct Layout {
+    area: Rect,
+    diagram: Rect,
+    step_w: f32,
+    step_h: f32,
+    table_h: f32,
+    em: f32,
+    margin: f32,
+    gap: f32,
+}
+
+fn layout(input: &DrawInput, w: f32, h: f32) -> Layout {
     let short = w.min(h);
     let em = short * 0.026;
     let margin = short * 0.035;
@@ -945,15 +1110,6 @@ pub fn draw(input: &DrawInput, size: &Size) -> Scene {
         w: w - 2.0 * margin,
         h: h - 2.0 * margin - title_h,
     };
-    let done = timeline::done(input.u);
-    let playing = timeline::playing(input.u, input.events.len());
-    let active = playing
-        .zip(timeline::phase(input.u, input.events.len()))
-        .map(|(i, phase)| (&input.events[i], phase));
-    let state = super::tables::replay(input.events, done);
-    let (table_title, rows) = table_rows(input, &state);
-    let table_h = if input.show_tables { em * 7.65 } else { 0.0 };
-
     let beside = w / h >= 1.24;
     let step_w = if beside && input.show_step_list {
         area.w * 0.34
@@ -965,15 +1121,42 @@ pub fn draw(input: &DrawInput, size: &Size) -> Scene {
     } else {
         0.0
     };
+    let table_h = if input.show_tables { em * 7.65 } else { 0.0 };
     let left_w = area.w - if step_w > 0.0 { step_w + gap } else { 0.0 };
     let diagram_h = area.h
         - if step_h > 0.0 { step_h + gap } else { 0.0 }
         - if table_h > 0.0 { table_h + gap } else { 0.0 };
-    let diagram = Rect {
-        w: left_w,
-        h: diagram_h,
-        ..area
-    };
+    Layout {
+        area,
+        diagram: Rect {
+            w: left_w,
+            h: diagram_h,
+            ..area
+        },
+        step_w,
+        step_h,
+        table_h,
+        em,
+        margin,
+        gap,
+    }
+}
+
+pub fn draw(input: &DrawInput, size: &Size) -> Scene {
+    let (w, h) = (size.width as f32, size.height as f32);
+    let short = w.min(h);
+    let layout = layout(input, w, h);
+    let em = layout.em;
+    let margin = layout.margin;
+    let gap = layout.gap;
+    let done = timeline::done(input.u);
+    let playing = timeline::playing(input.u, input.events.len());
+    let active = playing
+        .zip(timeline::phase(input.u, input.events.len()))
+        .map(|(i, phase)| (&input.events[i], phase));
+    let state = super::tables::replay(input.events, done);
+    let (table_title, rows) = table_rows(input, &state);
+
     let mut p = Painter::new(w);
 
     p.fill_round(
@@ -1002,7 +1185,7 @@ pub fn draw(input: &DrawInput, size: &Size) -> Scene {
         margin,
         margin + em * 2.72,
         em * 0.90,
-        area.w,
+        layout.area.w,
         TEXT_DIM,
     );
     let leased = input
@@ -1011,27 +1194,27 @@ pub fn draw(input: &DrawInput, size: &Size) -> Scene {
         .is_some_and(|event| {
             done > 0 && event.proto == Proto::DhcpAck && event.legs.contains(&CLIENT)
         });
-    draw_diagram(&mut p, input, diagram, active, leased, short);
+    draw_diagram(&mut p, input, layout.diagram, active, leased, short);
     if input.show_tables {
         let rect = Rect {
-            y: diagram.bottom() + gap,
-            h: table_h,
-            ..diagram
+            y: layout.diagram.bottom() + gap,
+            h: layout.table_h,
+            ..layout.diagram
         };
         draw_table(&mut p, rect, table_title, &rows, done, em, short);
     }
     if input.show_step_list {
-        let rect = if beside {
+        let rect = if layout.step_w > 0.0 {
             Rect {
-                x: diagram.right() + gap,
-                w: step_w,
-                ..area
+                x: layout.diagram.right() + gap,
+                w: layout.step_w,
+                ..layout.area
             }
         } else {
             Rect {
-                y: area.bottom() - step_h,
-                h: step_h,
-                ..area
+                y: layout.area.bottom() - layout.step_h,
+                h: layout.step_h,
+                ..layout.area
             }
         };
         draw_steps(&mut p, input, rect, done, playing, em, short);
@@ -1039,5 +1222,123 @@ pub fn draw(input: &DrawInput, size: &Size) -> Scene {
     Scene {
         coordinate_space: CoordinateSpace::Canvas,
         elements: p.elements,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::scenario::{build, SCENARIOS};
+    use crate::topology::topology;
+
+    #[test]
+    fn port_labels_clear_packets_and_devices() {
+        for routed in [false, true] {
+            for name in SCENARIOS {
+                let scenario = Scenario::parse(name).unwrap();
+                let topo = topology(routed, scenario == Scenario::Dns);
+                let events = build(scenario, topo);
+                let mut input = DrawInput {
+                    topo,
+                    events: &events,
+                    scenario,
+                    u: 0.0,
+                    labels: Labels::Full,
+                    table_kind: TableKind::Auto,
+                    show_tables: true,
+                    show_step_list: true,
+                    speed_lines: true,
+                    packet_percent: 2.4,
+                    accent: crate::ACCENT_DEFAULT,
+                };
+                for (width, height) in [(1280, 720), (320, 180), (480, 720), (900, 900)] {
+                    let size = Size { width, height };
+                    for (tables, steps) in
+                        [(true, true), (true, false), (false, true), (false, false)]
+                    {
+                        input.show_tables = tables;
+                        input.show_step_list = steps;
+                        for packet_percent in [2.4, 6.0] {
+                            input.packet_percent = packet_percent;
+                            check_port_labels(&mut input, &size);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn check_port_labels(input: &mut DrawInput, size: &Size) {
+        let topo = input.topo;
+        let (w, h) = (size.width as f32, size.height as f32);
+        let short = w.min(h);
+        let diagram = layout(input, w, h).diagram;
+        let centers = device_centers(topo, diagram);
+        let icon = diagram_metrics(diagram, short).icon;
+        let devices: Vec<_> = topo
+            .devices
+            .iter()
+            .zip(&centers)
+            .map(|(device, &(x, y))| glyph_bounds(x, y, device.kind, icon, short))
+            .collect();
+        let style = packet_style(input, diagram, short);
+
+        // Include both holds and sample every hop, including each flood.
+        for sample in -1..=input.events.len() as i32 * 8 {
+            input.u = sample as f32 / 8.0;
+            let context = || {
+                format!(
+                    "{:?} on {} at {w}x{h}, tables {}, steps {}, packet size {}, timeline position {}",
+                    input.scenario, topo.label, input.show_tables, input.show_step_list,
+                    input.packet_percent, input.u,
+                )
+            };
+            let mut obstacles = devices.clone();
+            if let Some(index) = timeline::playing(input.u, input.events.len()) {
+                let event = &input.events[index];
+                let from = centers[usize::from(event.from)];
+                let phase = timeline::phase(input.u, input.events.len()).unwrap();
+                for &leg in &event.legs {
+                    let to = centers[usize::from(leg)];
+                    let shape = packet_geometry(from, to, phase, event, &style);
+                    obstacles.extend(packet_obstacles(&shape, short));
+                }
+            }
+
+            let mut expected = topo.links.len() * 2;
+            if obstacles.len() > devices.len() {
+                // A moving pill may leave no clear spot close to the port.
+                expected -= 2;
+            }
+            let mut count = 0;
+            for element in draw(input, size).elements {
+                let DrawCommand::TextRun(run) = element else {
+                    continue;
+                };
+                if (run.color.r, run.color.g, run.color.b)
+                    != (PORT_TEXT.r, PORT_TEXT.g, PORT_TEXT.b)
+                {
+                    continue;
+                }
+                count += 1;
+                let bounds = port_label_bounds(
+                    &run.text,
+                    run.x + w * 0.5,
+                    run.y + run.font_size * 0.93,
+                    run.font_size,
+                );
+                for obstacle in &obstacles {
+                    // Recovering the anchor from the text run can round at the edge.
+                    assert!(
+                        !bounds.overlaps(obstacle.padded(-0.0001)),
+                        "{}: {} {bounds:?} overlaps {obstacle:?}",
+                        context(),
+                        run.text,
+                    );
+                }
+                obstacles.push(bounds);
+            }
+            assert!(count >= expected, "{}: only {count} port labels", context());
+        }
     }
 }

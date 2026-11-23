@@ -104,7 +104,12 @@ def main():
     assert midpoint != render("tcp-short-timeline", scenario="tcp", progress=0.5, steps=3)
     assert render("ping-auto-table") != render("ping-mac-table", table="mac")
     assert render("default") == render("ping-end", scenario="ping", progress=1.0)
+    trace = {"scenario": "traceroute", "topology": "single-switch"}
+    trace_auto = render("trace-auto-table", **trace)
+    assert trace_auto == render("trace-mac-table", table="mac", **trace)
+    assert trace_auto != render("trace-route-table", table="route", **trace)
     render("invalid-scenario", scenario="ospf", expect_error=True)
+    render("invalid-topology", topology="token-ring", expect_error=True)
 
     clip["animations"] = [{"target": {"Param": "progress"}, "keys": {
         "0": {"value": {"Number": 0.0}, "interpolation": "Linear"},

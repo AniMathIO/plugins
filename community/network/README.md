@@ -38,7 +38,9 @@ Each event animates one link hop. A switch flood can send copies along multiple
 links simultaneously. ARP and MAC entries appear once the learning hop finishes.
 The route panel shows the router's configured connected networks. TCP and
 traceroute start with endpoint ARP already resolved, and DNS elides ARP beyond
-the initial client-side lookup. The lessons use IPv4 and a single switch with
+the initial client-side lookup. The transport lessons show TCP flags and the
+order of TCP and UDP messages. Transport port numbers and TCP sequence and
+acknowledgment numbers are omitted. The lessons use IPv4 and a single switch with
 optional routing. Timing is illustrative, with equal time per hop and brief
 holds before and after the exchange.
 
@@ -50,9 +52,9 @@ holds before and after the exchange.
 | `topology` | `through-router` | `single-switch` for one LAN, `through-router` for separate LANs. DNS adds an authoritative service to the selected preset. |
 | `progress` | 1 | Timeline position from 0 to 1. |
 | `steps` | 24 | Maximum link hops to play, from 1 to 200. Values past the lesson's last hop play the full lesson. |
-| `labels` | `full` | `full` adds port names and explanatory notes. `brief` abbreviates packet labels. `none` uses dots for packets and hides port and IP labels. |
+| `labels` | `full` | `full` adds port names and explanatory notes. A port name is hidden briefly if a packet leaves too little room beside its link. `brief` abbreviates packet labels. `none` uses dots for packets and hides port and IP labels. |
 | `show_tables` | true | Show the state panel. |
-| `table` | `auto` | Select `mac`, `arp`, or `route` manually. Auto uses ARP for ping and DNS, routing for traceroute, and MAC for the other lessons. |
+| `table` | `auto` | Select `mac`, `arp`, or `route` manually. Auto uses ARP for ping and DNS, routing for traceroute on the routed preset, and MAC for the other lessons. |
 | `packet_size` | 2.4 | Packet size, 0.5–6% of the shorter canvas edge. |
 | `accent` | `#4FC3F7` | Color for device details and active step emphasis. Packet color distinguishes protocols. |
 | `show_step_list` | true | Show the packet timeline and highlight the current hop. |

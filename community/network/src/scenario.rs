@@ -173,13 +173,15 @@ impl Scenario {
         }
     }
 
-    /// Table the `auto` panel choice shows for this scenario.
+    /// Table the `auto` panel choice shows for this scenario. Traceroute only
+    /// shows routing where a router exists; a single-switch LAN falls back to
+    /// the switch's MAC table.
     #[must_use]
-    pub fn auto_table(self) -> TableKind {
+    pub fn auto_table(self, topo: &Topology) -> TableKind {
         match self {
             Self::Ping | Self::Dns => TableKind::Arp,
-            Self::Arp | Self::Tcp | Self::Dhcp => TableKind::Mac,
-            Self::Traceroute => TableKind::Route,
+            Self::Traceroute if !topo.routes.is_empty() => TableKind::Route,
+            _ => TableKind::Mac,
         }
     }
 }
@@ -236,10 +238,14 @@ impl Exchange<'_> {
         for (index, pair) in path.windows(2).enumerate() {
             let (sender, receiver) = (pair[0], pair[1]);
             if sender == self.switch && !self.learned.contains(&receiver) {
-                // The underlying frame remains unicast. Only its switch egress
-                // is duplicated, so there is no broadcast wave.
+                // An unknown destination floods the switch egress while the
+                // frame keeps its unicast address.
                 let legs = self.flood(path[index - 1]);
-                let explanation = "Unknown MAC: switch floods the frame";
+                let explanation = if legs.len() == 1 {
+                    "Unknown MAC: flood to the only other port"
+                } else {
+                    "Unknown MAC: flood to every other port"
+                };
                 self.hop(sender, legs, proto, false, explanation.into());
             } else {
                 self.hop(
@@ -265,7 +271,7 @@ impl Exchange<'_> {
             CLIENT,
             Proto::ArpReq,
             format!("Who has {target_ip}? Tell PC1"),
-            "Switch floods to its other ports",
+            "Switch floods to every other port",
         );
         self.send(target, CLIENT, Proto::ArpReply, format!("My MAC is {mac}"));
         let arrival = self.last();
@@ -457,7 +463,7 @@ impl Exchange<'_> {
             step.ttl = Some(destination_ttl - u8::from(router == Some(step.from)));
             if router == Some(step.from) {
                 step.note = "Router forwards with TTL 1".into();
-            } else if router.is_none() && step.from != CLIENT && step.legs.len() == 1 {
+            } else if router.is_none() && step.legs.contains(&SERVER) {
                 step.note = "Server receives the probe with TTL 1".into();
             }
         }

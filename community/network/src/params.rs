@@ -13,17 +13,6 @@ pub fn error(message: &str) -> Diagnostic {
     }
 }
 
-pub fn string<'a>(params: &'a [ParamEntry], id: &str, default: &'a str) -> &'a str {
-    params
-        .iter()
-        .find(|p| p.id == id)
-        .and_then(|p| match &p.value {
-            ParamValue::String(s) | ParamValue::EnumChoice(s) => Some(s.as_str()),
-            _ => None,
-        })
-        .unwrap_or(default)
-}
-
 pub fn number(
     params: &[ParamEntry],
     id: &str,
@@ -107,20 +96,26 @@ pub fn color_param(id: &str, label: &str, default: Color) -> ParamSpec {
     }
 }
 
-/// One of a fixed option set, or an error naming the allowed values.
+/// One of a fixed option set, or an error naming the allowed values. A missing
+/// parameter falls back to the default; an unsupported value *or a value of the
+/// wrong type* fails with the same clear message.
 pub fn one_of<'a>(
     params: &'a [ParamEntry],
     id: &str,
     default: &'a str,
     options: &[&str],
 ) -> Result<&'a str, Diagnostic> {
-    let value = string(params, id, default);
-    if options.contains(&value) {
-        Ok(value)
-    } else {
-        Err(error(&format!(
-            "Unsupported {id}. Expected one of {}",
-            options.join(", ")
-        )))
-    }
+    let value = match params.iter().find(|p| p.id == id).map(|p| &p.value) {
+        None => Some(default),
+        Some(ParamValue::String(s) | ParamValue::EnumChoice(s)) => Some(s.as_str()),
+        Some(_) => None,
+    };
+    value
+        .filter(|value| options.contains(value))
+        .ok_or_else(|| {
+            error(&format!(
+                "Unsupported {id}. Expected one of {}",
+                options.join(", ")
+            ))
+        })
 }
