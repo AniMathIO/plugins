@@ -18,6 +18,7 @@ MIT licensed, like AniMathIO. Plugins are sandboxed WebAssembly components.
 | --- | --- | --- | --- | --- | --- |
 | [Code Snippets](https://github.com/AniMathIO/plugins/tree/HEAD/community/code-snippets) | AniMathIO | Syntax-highlighted code with type-on reveal and token morph animations | MIT AND OFL-1.1 | 1.1.0 | [AniMathIO/plugins](https://github.com/AniMathIO/plugins/tree/HEAD/community/code-snippets) |
 | [Molecule Studio](https://github.com/AniMathIO/plugins/tree/HEAD/community/molecule) | AniMathIO | Self-drawing 2D molecular structures and reactions from SMILES, with CPK colors and wedge/dash stereo | MIT | 1.1.0 | [AniMathIO/plugins](https://github.com/AniMathIO/plugins/tree/HEAD/community/molecule) |
+| [Ray Optics](https://github.com/AniMathIO/plugins/tree/HEAD/community/optics) | AniMathIO | Animated lens and mirror rays, Snell refraction, total internal reflection and prism dispersion | MIT | 1.1.0 | [AniMathIO/plugins](https://github.com/AniMathIO/plugins/tree/HEAD/community/optics) |
 <!-- community-plugins:end -->
 
 Install from the editor's Plugins tab in AniMathIO 2.2+, or manually as described

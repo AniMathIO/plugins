@@ -21,6 +21,16 @@
       "path": "community/molecule",
       "license": "MIT",
       "min_abi": "1.1.0"
+    },
+    {
+      "id": "io.github.animathio.optics",
+      "name": "Ray Optics",
+      "author": "AniMathIO",
+      "description": "Animated lens and mirror rays, Snell refraction, total internal reflection and prism dispersion",
+      "repo": "AniMathIO/plugins",
+      "path": "community/optics",
+      "license": "MIT",
+      "min_abi": "1.1.0"
     }
   ],
   "delisted": []

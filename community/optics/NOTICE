@@ -1,0 +1,25 @@
+Ray Optics for AniMathIO
+Copyright (c) 2026 AniMathIO contributors. MIT (see ../../LICENSE).
+
+Behavioral reference: Ray Optics Simulation by Rick Tu and contributors
+https://github.com/ricktu288/ray-optics/tree/9dd7706097ec8b93171e04e7985be12c3309533c
+Version 5.5.0, commit 9dd7706097ec8b93171e04e7985be12c3309533c, Apache License 2.0.
+
+Studied src/core/geometry.js for ray/segment intersections,
+src/core/sceneObjs/glass/IdealLens.js for signed ideal-lens bending,
+src/core/sceneObjs/mirror/ArcMirror.js for the signed paraxial R/2 focal
+distance, src/core/sceneObjs/glass/Glass.js for boundary refraction and
+wavelength-dependent index, and src/core/PrimitiveBasedSimulator.js for
+the per-ray interaction-depth limit.
+
+The plugin reimplements these ideas with Rust vector geometry, nearest-face
+tracing, Snell transmission and total internal reflection, and a bounded
+prism trace per wavelength. The principal-ray construction and animation,
+labels, rendering and approximate spectral palette are written for AniMathIO.
+The formulas for conjugate distances, refraction and Cauchy dispersion are
+textbook material. No upstream JavaScript, GPU code, scenes or assets are
+copied. The Apache license text is retained in assets/ray-optics-LICENSE
+and packaged as licenses/ray-optics-LICENSE.
+
+The component uses wit-bindgen 0.40.0 (MIT OR Apache-2.0) for AniMathIO ABI
+bindings. Resolved Rust dependencies are listed in Cargo.lock.
