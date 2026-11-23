@@ -1,0 +1,7 @@
+api_version = "1.1.0"
+id = "io.github.animathio.network"
+name = "Net Lab"
+version = "1.0.0"
+description = "Animate ARP, ICMP ping, TCP, DHCP, DNS and traceroute over teaching topologies"
+kinds = ["clip-source"]
+capabilities = []

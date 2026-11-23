@@ -1,0 +1,25 @@
+Net Lab for AniMathIO
+Copyright (c) 2026 AniMathIO contributors. MIT (see ../../LICENSE).
+
+Protocol sequencing references
+
+michael-borck/netsim, c3075e7fe65b7e17515d802eaef625bab751af58
+https://github.com/michael-borck/netsim/tree/c3075e7fe65b7e17515d802eaef625bab751af58
+MIT, copyright (c) 2026 Michael Borck. See assets/netsim-michael-borck-LICENSE.
+The ARP, ping, DHCP and traceroute flows illustrate ordering at each hop,
+switch flooding, reply paths and the moment a table entry is learned. Net Lab
+implements those teaching sequences as bounded, authored Rust timelines.
+
+joxorsayan/netsim, fb07a807f86f2daa64822b54239e3fcb53850693
+https://github.com/joxorsayan/netsim/tree/fb07a807f86f2daa64822b54239e3fcb53850693
+MIT, copyright (c) 2025 Sayan Roy Chowdhury. See assets/netsim-joxorsayan-LICENSE.
+The switching, ARP, ICMP and DHCP examples informed the scope and order of the
+teaching sequences.
+
+Protocol behavior also follows RFC 826 (ARP), 792 (ICMPv4), 1812 (IPv4
+forwarding), 2131 (DHCP), 1034/1035 (DNS) and 9293 (TCP). The implementation,
+device glyphs and artwork were authored for this plugin. The sample exchanges
+use private LAN addresses and the RFC 2606 and RFC 5737 example namespaces.
+
+wit-bindgen and its dependencies retain their respective licenses. Cargo.lock
+records the resolved versions.

@@ -31,6 +31,16 @@
       "path": "community/optics",
       "license": "MIT",
       "min_abi": "1.1.0"
+    },
+    {
+      "id": "io.github.animathio.network",
+      "name": "Net Lab",
+      "author": "AniMathIO",
+      "description": "Animate ARP, ICMP ping, TCP, DHCP, DNS and traceroute over teaching topologies",
+      "repo": "AniMathIO/plugins",
+      "path": "community/network",
+      "license": "MIT",
+      "min_abi": "1.1.0"
     }
   ],
   "delisted": []
