@@ -271,6 +271,8 @@ pub fn stack(count: usize, speed: f64, material: Material, plan: Plan, trace: bo
     let transfer = 0.5 * (1.0 + material.restitution);
     // Moment of inertia about a corner, divided by mass.
     let inertia = (BLOCK_WIDTH * BLOCK_WIDTH + BLOCK_HEIGHT * BLOCK_HEIGHT) / 3.0;
+    // Below this restitution the first impulse can leave the launcher rolling forward.
+    let can_recontact = material.restitution < STACK_BALL_R * STACK_BALL_R / inertia;
     let flat = std::f64::consts::FRAC_PI_2;
     let slowdown = 0.05 * material.friction * material.gravity * plan.dt;
     let mut launched = false;
@@ -288,8 +290,6 @@ pub fn stack(count: usize, speed: f64, material: Material, plan: Plan, trace: bo
             ball.vx -= impulse;
             launched = true;
         }
-        ball.angle = -(ball.x - BALL_START) / STACK_BALL_R;
-
         for block in &mut blocks {
             if block.angle == flat || (block.angle == 0.0 && block.omega == 0.0) {
                 continue;
@@ -337,6 +337,10 @@ pub fn stack(count: usize, speed: f64, material: Material, plan: Plan, trace: bo
                 block.omega = 0.0;
             }
         }
+        if can_recontact && launched {
+            launcher_contact(&mut ball, &mut blocks[0], inertia, material.restitution);
+        }
+        ball.angle = -(ball.x - BALL_START) / STACK_BALL_R;
         record(&mut trail, ball, step, plan, trace);
     }
 
@@ -352,6 +356,48 @@ pub fn stack(count: usize, speed: f64, material: Material, plan: Plan, trace: bo
         bodies,
         trail,
         work,
+    }
+}
+
+fn launcher_contact(ball: &mut Snapshot, block: &mut Domino, inertia: f64, restitution: f64) {
+    let (sin, cos) = block.angle.sin_cos();
+    let pivot = FIRST_DOMINO + DOMINO_HX;
+    let radius = STACK_BALL_R;
+    let face_arm = radius - (radius + BLOCK_WIDTH) * sin;
+    // Offset the left face by the ball radius. As the block falls, the
+    // tangency moves below that face and onto its bottom-left corner.
+    let (contact_x, normal_x, arm) = if face_arm >= 0.0 {
+        (
+            pivot + (radius * sin - BLOCK_WIDTH - radius) / cos,
+            cos,
+            face_arm / cos,
+        )
+    } else {
+        let corner_x = -BLOCK_WIDTH * cos;
+        let corner_y = BLOCK_WIDTH * sin;
+        let dy = radius - corner_y;
+        let dx = (radius * radius - dy * dy).sqrt();
+        let normal_x = dx / radius;
+        let arm = corner_y * normal_x + corner_x * dy / radius;
+        (pivot + corner_x - dx, normal_x, arm)
+    };
+    if ball.x < contact_x {
+        return;
+    }
+    ball.x = contact_x;
+
+    let closing = ball.vx * normal_x - block.omega * arm;
+    if closing > 0.0 {
+        // The floor holds the ball at a fixed height and supports a flat block.
+        let angular_response = if block.angle == std::f64::consts::FRAC_PI_2 {
+            0.0
+        } else {
+            arm / inertia
+        };
+        let impulse =
+            (1.0 + restitution) * closing / (normal_x * normal_x + arm * angular_response);
+        ball.vx -= impulse * normal_x;
+        block.omega += impulse * angular_response;
     }
 }
 

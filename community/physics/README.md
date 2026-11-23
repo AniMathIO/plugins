@@ -14,6 +14,8 @@ Plugin ID `io.github.animathio.physics` · ABI 1.1.0 · MIT
 | --- | --- | --- | --- |
 | ![Six disks in motion at two seconds](screenshots/collision-050.png) | ![Elastic collision transfers the launch velocity](screenshots/collision-elastic.png) | ![Inelastic collision shares the launch velocity](screenshots/collision-inelastic.png) | ![Dominoes partway through the chain reaction](screenshots/stack-chain.png) |
 
+![The launcher and domino row at 2.4 seconds with restitution set to 0.1](screenshots/stack-soft.png)
+
 ## Use in AniMathIO
 
 Add **Physics Play** from the Library and choose a **Scene** in the inspector.
@@ -31,7 +33,7 @@ gravity keyframe changes the entire computed trajectory for that frame.
 | `pendulum` | A bob released from rest. Shows the current angle and the full-amplitude period from the elliptic-integral formula. |
 | `spring` | A vertical Hooke oscillator released from rest at 30% beyond equilibrium. The spring is tuned so its static extension equals **Length**. Shows its period and extension. |
 | `collision` | Equal-mass disks in a 12 × 5 m arena. Shows their total momentum and translational kinetic energy. The momentum readout flags exchanges with the arena and the effect of gravity. |
-| `stack` | A rolling ball rebounds off the first domino and tips it. Contacts trigger the remaining dominoes, and the readout counts how many have tipped past 0.6 radians. |
+| `stack` | A rolling ball tips the first domino. At low restitution the ball can keep rolling and make contact again. Contacts trigger the remaining dominoes, and the readout counts how many have tipped past 0.6 radians. |
 
 To compare collision types, set **Bodies** to 2, **Speed** to 5 m/s,
 **Gravity** and **Friction** to 0, **Duration** to 1 s and **Progress** to 0.85.

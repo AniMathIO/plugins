@@ -20,7 +20,7 @@ SCENES = ('projectile', 'pendulum', 'spring', 'collision', 'stack')
 TICKS_PER_SECOND = 705_600_000
 
 
-def check_pixels(image, name, accent):
+def check_pixels(image, name, accent, require_launcher):
     colors = dict((rgb, count) for count, rgb in image.getcolors(image.width * image.height))
     # Host render can return success for a checkerboard with error text. Require
     # the actual project background and a solid patch of the plugin's body color.
@@ -29,6 +29,8 @@ def check_pixels(image, name, accent):
     )
     if accent is not None:
         assert colors.get(accent, 0) > 30, f'{name}: no physics body colored {accent}'
+    if require_launcher:
+        assert colors.get(AMBER, 0) > 30, f'{name}: launcher is out of frame'
 
 
 def main():
@@ -75,7 +77,7 @@ def main():
 
     worst_stress = (0.0, '')
 
-    def render(name, *, frame=0, expected_accent=AMBER, **params):
+    def render(name, *, frame=0, expected_accent=AMBER, require_launcher=False, **params):
         nonlocal worst_stress
         clip['kind'] = {'Plugin': {'plugin_id': PLUGIN_ID, 'params': params}}
         path = WORK / f'{name}.amio'
@@ -91,7 +93,7 @@ def main():
         # The launcher can roll out of frame after impact. Require a domino
         # for stack frames and the highlighted body color for other scenes.
         body_color = FOREGROUND if params.get('scene') == 'stack' else expected_accent
-        check_pixels(image, name, body_color)
+        check_pixels(image, name, body_color, require_launcher)
         print('PASS', name)
         return image.tobytes()
 
@@ -121,7 +123,8 @@ def main():
     assert elastic != inelastic
     assert elastic != render('double-mass', **isolated, restitution=1, mass=2)
     render('stack-chain', scene='stack', progress=0.1, bodies=8)
-    screenshots += ['collision-elastic', 'collision-inelastic', 'stack-chain']
+    render('stack-soft', scene='stack', progress=0.6, restitution=0.1, require_launcher=True)
+    screenshots += ['collision-elastic', 'collision-inelastic', 'stack-chain', 'stack-soft']
 
     # Force maximum-size worlds to run inside the released host's 50M fuel,
     # 64 MiB and epoch limits. Exercise busy contacts as well as default material.

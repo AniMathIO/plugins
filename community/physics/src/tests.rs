@@ -258,6 +258,47 @@ fn neighboring_dominoes_do_not_penetrate_during_replay() {
 }
 
 #[test]
+fn soft_domino_launches_keep_the_ball_outside_the_row() {
+    let p = read_params(&[]).unwrap();
+    for restitution in [0.0, 0.1, 0.25] {
+        let material = sim::Material {
+            restitution,
+            ..p.material()
+        };
+        for hz in [60, 120, 240] {
+            let dt = 1.0 / f64::from(hz);
+            for steps in 0..=(p.duration / dt).round() as usize {
+                let plan = sim::Plan { dt, steps };
+                let state = sim::stack(p.bodies, p.speed, material, plan, false);
+                let ball = state.bodies[0];
+                let first = state.bodies[1];
+                let (sin, cos) = first.angle.sin_cos();
+                let dx = ball.x - first.x;
+                let dy = ball.y - first.y;
+                // Measure the distance to the oriented rectangle in its local axes.
+                let x = dx * cos + dy * sin;
+                let y = -dx * sin + dy * cos;
+                let outside_x = (x.abs() - sim::DOMINO_HX).max(0.0);
+                let outside_y = (y.abs() - sim::DOMINO_HY).max(0.0);
+                assert!(
+                    dx < 0.0 && outside_x.hypot(outside_y) >= sim::STACK_BALL_R - 1e-9,
+                    "launcher at restitution {restitution}, {hz} Hz, t = {:.4} s: {ball:?}, {first:?}",
+                    plan.time()
+                );
+                for (index, pair) in state.bodies[1..].windows(2).enumerate() {
+                    let overlap = domino_overlap(pair[0], pair[1]);
+                    assert!(
+                        overlap < 1e-9,
+                        "pair {index} at restitution {restitution}, {hz} Hz, t = {:.4} s: {overlap:.6} m",
+                        plan.time()
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn domino_launcher_contact_speed_matches_configured_restitution() {
     let p = read_params(&[]).unwrap();
     let plan = sim::Plan::new(1.0, p.duration);
