@@ -68,7 +68,7 @@ pub fn structure_reveal(
 pub const REACT_REVEAL_END: f32 = 0.42;
 const ARROW_START: f32 = 0.56;
 pub const PRODUCT_START: f32 = 0.74;
-pub const DIMMED_ALPHA: f32 = 0.45;
+pub const DIMMED_ALPHA: f32 = 0.70;
 
 pub struct ReactionPhase {
     pub reactant_progress: f32,

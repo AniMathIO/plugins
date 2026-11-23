@@ -143,6 +143,8 @@ def main():
     render("alternate-double-bond", preset="aspirin", bond_order_animation="double-stroke")
     frames["water-lone-pairs"] = render("water-lone-pairs", preset="water", show_lone_pairs=True)
     render("hydrogens", preset="ethanol", show_hydrogens=True, show_carbons="labeled")
+    render("charged-amine", smiles="C[NH3+]")
+    render("hydronium", smiles="[OH3+]")
 
     for percent in (0, 42, 65, 100):
         name = f"combustion-{percent:03}"
@@ -165,6 +167,8 @@ def main():
     render("bounded-fragments", mode="reaction", smiles=".".join(["O"] * 8),
            product_smiles=".".join(["O"] * 8))
     render("invalid-smiles", smiles="C1CC", diagnostic="invalid-input")
+    render("overvalent-carbon", smiles="CC(C)(C)(C)(C)C", diagnostic="invalid-input")
+    render("overvalent-bracket-hydrogens", smiles="[CH5]", diagnostic="invalid-input")
     render("oversized-smiles", smiles="C" * 513, diagnostic="limit-exceeded")
     render("oversized-reaction", mode="reaction", smiles="O", product_smiles="C" * 128,
            diagnostic="limit-exceeded")

@@ -31,8 +31,8 @@ if you want all labels to use that same ink.
   dots. Repeat a species to show multiple copies, as the ethanol combustion preset does.
 - Keyframe **Progress** from 0 to 1 using the inspector diamonds. Structure mode grows the
   bonds and fades in labels. In reaction mode the reactants draw during 0–42%, dim during
-  42–56%, and stay visible while the arrow draws during 56–74%. The products draw during
-  74–100%. A clip without keyframes shows the finished diagram.
+  42–56%, and remain at 70% opacity through the finished frame. The arrow draws during
+  56–74% and the products during 74–100%. A clip without keyframes shows the finished diagram.
 
 ## Parameters
 
@@ -46,7 +46,7 @@ if you want all labels to use that same ink.
 | `reveal_by` | `bond` | `bond` follows bond order in the input, `atom` follows atom order, and `together` draws all bonds at once |
 | `cpk` | On | Color heteroatom labels using the chematic CPK palette |
 | `show_carbons` | `bare` | Hide routine skeletal carbon labels or show them with `labeled` |
-| `show_hydrogens` | Off | Append hydrogen counts to labels. Hydrogen atoms present in SMILES always draw |
+| `show_hydrogens` | Off | Show hydrogen counts on carbon labels, including terminal carbons in bare mode. Heteroatom hydrogen counts and explicit hydrogen atoms always draw |
 | `show_lone_pairs` | Off | Show dots for supported neutral, nonaromatic heteroatoms |
 | `atom_numbers` | Off | Show one-based atom numbers in SMILES order |
 | `highlight` | Empty | Mix one-based atoms and zero-based bonds, e.g. `1,4-6,b0,b2-3`. Indices restart in each reaction fragment |
@@ -90,9 +90,11 @@ Upstream commits and licenses are recorded in [NOTICE](NOTICE).
 
 Inputs are capped at 512 UTF-8 bytes per SMILES field, including the separator when using
 one-field reaction syntax. A complete clip supports up to 128 atoms and 256 bonds across both
-sides, with at most eight fragments per side. The host's sandbox limits also apply. The layout
-produces teaching diagrams. Dense or unusual structures can crowd labels, and the plugin
-does not balance reactions, model reaction mechanisms, or infer unspecified stereochemistry.
+sides, with at most eight fragments per side. Bond orders plus bracket hydrogens must fit the
+element's common valence limit where defined. The host's sandbox limits also apply.
+Cage structures such as cubane and adamantane can produce crowded or overlapping 2D
+layouts. E/Z double-bond stereochemistry is unsupported. The plugin does not balance reactions,
+model reaction mechanisms, or infer unspecified stereochemistry.
 
 ## Verification
 

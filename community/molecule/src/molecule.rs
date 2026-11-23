@@ -3,7 +3,9 @@
 //! used as a dependency; the wedge assignment and everything visual below is
 //! original code for this plugin (see NOTICE).
 use crate::params::{invalid, limit};
-use chematic_core::{implicit_hcount, AtomIdx, BondOrder, Chirality, Molecule, STEREO_H_SENTINEL};
+use chematic_core::{
+    bond_order_sum, implicit_hcount, AtomIdx, BondOrder, Chirality, Molecule, STEREO_H_SENTINEL,
+};
 use chematic_depict::{compute_depict_data, depict_data_with_coords, DepictBondKind, DepictData};
 
 pub const MAX_SOURCE_BYTES: usize = 512;
@@ -54,6 +56,35 @@ fn parse(smiles: &str) -> Result<Molecule, crate::Diagnostic> {
     })?;
     if mol.atom_count() == 0 {
         return Err(invalid("SMILES needs at least one atom"));
+    }
+    for (idx, atom) in mol.atoms() {
+        let Some(&neutral_max) = atom.element.normal_valences().last() else {
+            continue;
+        };
+        if atom.wildcard {
+            continue;
+        }
+        let charge = i16::from(atom.charge);
+        let atomic_number = i16::from(atom.element.atomic_number());
+        let maximum = match atomic_number {
+            // For B through F, formal charge changes the valence electron
+            // count, and the shell can accommodate at most eight electrons.
+            5..=9 => {
+                let electrons = atomic_number - 2 - charge;
+                electrons.min(8 - electrons)
+            }
+            _ => i16::from(neutral_max) + charge,
+        }
+        .max(0) as u16;
+        let used =
+            u16::from(bond_order_sum(&mol, idx)) + u16::from(atom.explicit_hcount().unwrap_or(0));
+        if used > maximum {
+            return Err(invalid(&format!(
+                "Atom {} ({}) has valence {used}, above its maximum of {maximum}",
+                idx.0 + 1,
+                atom.element.symbol(),
+            )));
+        }
     }
     Ok(mol)
 }
@@ -355,6 +386,7 @@ pub fn display_label(
     idx: usize,
     carbons: CarbonStyle,
     hydrogens: bool,
+    bond_on_right: bool,
 ) -> Option<String> {
     let id = AtomIdx(idx as u32);
     let atom = mol.atom(id);
@@ -365,7 +397,7 @@ pub fn display_label(
     let degree = mol.degree(id);
     let carbon = atom.element.atomic_number() == 6;
     let h = h_count(mol, idx);
-    let show_h = h > 0 && (hydrogens || degree == 0 || (atom.aromatic && !carbon));
+    let show_h = h > 0 && (!carbon || hydrogens || degree == 0);
     if carbon
         && matches!(carbons, CarbonStyle::Bare)
         && degree != 0
@@ -376,32 +408,34 @@ pub fn display_label(
         return None;
     }
 
-    let mut label = atom.isotope.map_or_else(String::new, |isotope| {
-        chemical_digits(isotope, ['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'])
-    });
-    let hydrogen = if h == 1 {
-        "H".to_owned()
-    } else {
-        format!(
-            "H{}",
-            chemical_digits(h.into(), ['₀', '₁', '₂', '₃', '₄', '₅', '₆', '₇', '₈', '₉'])
-        )
+    const SUPERSCRIPT: [char; 10] = ['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'];
+    const SUBSCRIPT: [char; 10] = ['₀', '₁', '₂', '₃', '₄', '₅', '₆', '₇', '₈', '₉'];
+    let mut label = String::new();
+    let append_h = |label: &mut String| {
+        label.push('H');
+        if h > 1 {
+            label.push_str(&chemical_digits(h.into(), SUBSCRIPT));
+        }
     };
-    // Isolated oxygen with hydrogens is water, written H₂O.
-    let water = degree == 0 && symbol == "O" && h == 2;
-    if water {
-        label.push_str(&hydrogen);
+    // Put terminal hydrogens away from the bond. Standalone water and
+    // hydronium use the molecular formulas H₂O and H₃O⁺.
+    let hydrogen_first = show_h && (bond_on_right || (degree == 0 && symbol == "O" && h >= 2));
+    if hydrogen_first {
+        append_h(&mut label);
+    }
+    if let Some(isotope) = atom.isotope {
+        label.push_str(&chemical_digits(isotope, SUPERSCRIPT));
     }
     label.push_str(symbol);
-    if show_h && !water {
-        label.push_str(&hydrogen);
+    if show_h && !hydrogen_first {
+        append_h(&mut label);
     }
     if atom.charge != 0 {
         let magnitude = atom.charge.unsigned_abs();
         if magnitude > 1 {
-            label.push_str(&magnitude.to_string());
+            label.push_str(&chemical_digits(magnitude.into(), SUPERSCRIPT));
         }
-        label.push(if atom.charge < 0 { '−' } else { '+' });
+        label.push(if atom.charge < 0 { '⁻' } else { '⁺' });
     }
     Some(label)
 }

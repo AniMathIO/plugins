@@ -1,15 +1,13 @@
 //! Native unit tests for the chemistry core, layout, animation and stereo
 //! parity (no host imports are touched; full renders are covered by smoke.py
 //! in the wasm sandbox).
-use super::animation::{
-    reaction_phase, structure_reveal, DIMMED_ALPHA, PRODUCT_START, REACT_REVEAL_END,
-};
+use super::animation::{reaction_phase, structure_reveal, PRODUCT_START, REACT_REVEAL_END};
 use super::layout::{fit_scale, reaction_layout, structure_layout, Bounds};
 use super::molecule::{
     display_label, h_count, lone_pairs, parse_fragment, parse_reaction, CarbonStyle, Fragment,
 };
 use super::params::highlights;
-use super::{inputs, MoleculeStudio};
+use super::{inputs, number_position, MoleculeStudio};
 use crate::{Guest, ParamEntry, ParamKind, ParamValue, Size};
 use chematic_core::{AtomIdx, Chirality};
 
@@ -63,6 +61,31 @@ fn parse_rejects_bad_grammar_cleanly() {
     assert_eq!(fragment_err("C1CC"), "invalid-input");
     assert_eq!(fragment_err("not-a-molecule"), "invalid-input");
     assert_eq!(fragment_err("C(C"), "invalid-input");
+}
+
+#[test]
+fn parsing_rejects_valence_above_the_element_ceiling() {
+    for (smiles, atom, used, maximum) in [
+        ("CC(C)(C)(C)(C)C", "2 (C)", 6, 4),
+        ("[CH5]", "1 (C)", 5, 4),
+        ("C#[CH2]", "2 (C)", 5, 4),
+        ("C[NH3]C", "2 (N)", 5, 3),
+        ("[NH5+]", "1 (N)", 5, 4),
+        ("[OH4+]", "1 (O)", 4, 3),
+    ] {
+        let diagnostic = parse_fragment(smiles).err().expect(smiles);
+        assert_eq!(diagnostic.code, "invalid-input", "{smiles}");
+        assert_eq!(
+            diagnostic.message,
+            format!("Atom {atom} has valence {used}, above its maximum of {maximum}"),
+            "{smiles}",
+        );
+    }
+    let diagnostic = parse_reaction("O", "O.[CH5]").err().unwrap();
+    assert_eq!(diagnostic.code, "invalid-input");
+    for smiles in ["[CH3]", "C[NH3+]", "[OH3+]", "OP(=O)(O)O", "[nH]1cccc1"] {
+        fragment(smiles);
+    }
 }
 
 #[test]
@@ -283,7 +306,7 @@ fn reaction_timeline_hits_exact_endpoints() {
     let one = at(1.0);
     assert_eq!(one.product_progress, 1.0);
     assert_eq!(one.arrow, 1.0);
-    assert!((one.reactant_alpha - DIMMED_ALPHA).abs() < 1e-4);
+    assert!((one.reactant_alpha - 0.70).abs() < 1e-4);
     // Reactants fully drawn before the arrow starts.
     let pre_arrow = at(REACT_REVEAL_END);
     assert_eq!(pre_arrow.reactant_progress, 1.0);
@@ -313,24 +336,71 @@ fn implicit_h_counts_match_valence() {
     assert_eq!(h_count(&ethanol.mol, 1), 2);
     assert_eq!(h_count(&ethanol.mol, 2), 1);
     // Bracket atoms keep their declared count.
-    let amine = fragment("C[NH2]C");
+    let amine = fragment("C[NH2]");
     assert_eq!(h_count(&amine.mol, 1), 2);
 }
 
 #[test]
 fn labels_follow_carbon_and_hydrogen_options() {
     let ethanol = fragment("CCO");
-    let bare = |i: usize| display_label(&ethanol.mol, i, CarbonStyle::Bare, false);
-    let shown = |i: usize| display_label(&ethanol.mol, i, CarbonStyle::Labeled, true);
+    let bare = |i: usize| display_label(&ethanol.mol, i, CarbonStyle::Bare, false, false);
+    let shown = |i: usize| display_label(&ethanol.mol, i, CarbonStyle::Labeled, true, false);
     assert_eq!(bare(0), None); // skeletal carbon
-    assert_eq!(bare(2).as_deref(), Some("O"));
+    assert_eq!(bare(2).as_deref(), Some("OH"));
+    assert_eq!(
+        display_label(&ethanol.mol, 2, CarbonStyle::Bare, false, true).as_deref(),
+        Some("HO")
+    );
     assert_eq!(shown(0).as_deref(), Some("CH₃"));
     assert_eq!(shown(1).as_deref(), Some("CH₂"));
     assert_eq!(shown(2).as_deref(), Some("OH"));
-    // Charges render on the label.
-    let acetate = fragment("CC(=O)[O-]");
-    let oxy = display_label(&acetate.mol, 3, CarbonStyle::Bare, true).unwrap();
-    assert_eq!(oxy, "O−");
+    assert_eq!(
+        display_label(&ethanol.mol, 0, CarbonStyle::Bare, true, false).as_deref(),
+        Some("CH₃")
+    );
+    assert_eq!(
+        display_label(&ethanol.mol, 1, CarbonStyle::Bare, true, false),
+        None
+    );
+}
+
+#[test]
+fn heteroatom_hydrogens_and_superscript_charges_are_always_shown() {
+    for (smiles, atom, expected) in [
+        ("CCO", 2, "OH"),
+        ("CC(=O)O", 2, "O"),
+        ("CC(=O)O", 3, "OH"),
+        ("CN", 1, "NH₂"),
+        ("CNC", 1, "NH"),
+        ("CS", 1, "SH"),
+        ("OP(=O)(O)O", 0, "OH"),
+        ("[nH]1cccc1", 0, "NH"),
+        ("C[NH3+]", 1, "NH₃⁺"),
+        ("O", 0, "H₂O"),
+        ("[OH3+]", 0, "H₃O⁺"),
+        ("CC(=O)[O-]", 3, "O⁻"),
+        ("[Ca+2]", 0, "Ca²⁺"),
+    ] {
+        let f = fragment(smiles);
+        for hydrogens in [false, true] {
+            let label = display_label(&f.mol, atom, CarbonStyle::Bare, hydrogens, false);
+            assert_eq!(label.as_deref(), Some(expected), "{smiles}");
+        }
+    }
+}
+
+#[test]
+fn atom_numbers_use_the_open_space_between_bonds() {
+    let p = (0.0, 0.0);
+    let place = |neighbors: &[(f32, f32)], center| {
+        number_position(p, center, 1.0, neighbors.iter().copied())
+    };
+    let (x, y) = place(&[(1.0, 0.0)], (-1.0, 0.0));
+    assert!((x + 1.0).abs() < 1e-5 && y.abs() < 1e-5);
+    let (x, y) = place(&[(1.0, 1.0), (1.0, -1.0)], (-1.0, 0.0));
+    assert!((x + 1.0).abs() < 1e-5 && y.abs() < 1e-5);
+    let (x, y) = place(&[(1.0, 0.0), (-1.0, 0.0)], (0.0, 1.0));
+    assert!(x.abs() < 1e-5 && (y + 1.0).abs() < 1e-5);
 }
 
 #[test]

@@ -93,7 +93,7 @@ impl Guest for MoleculeStudio {
                 enum_param("reveal_by", "Reveal by", &["bond", "atom", "together"], "bond"),
                 bool_param("cpk", "CPK colors", true),
                 enum_param("show_carbons", "Carbons", &["bare", "labeled"], "bare"),
-                bool_param("show_hydrogens", "Hydrogens on labels", false),
+                bool_param("show_hydrogens", "Hydrogens on carbon labels", false),
                 bool_param("show_lone_pairs", "Lone pairs", false),
                 bool_param("atom_numbers", "Atom numbers", false),
                 text_param("highlight", "Highlight (1,4-6, b0)", ""),
@@ -288,7 +288,18 @@ impl<'a> Prepared<'a> {
             .collect();
         let labels: Vec<_> = (0..positions.len())
             .map(|i| {
-                let text = display_label(&fragment.mol, i, config.carbons, config.hydrogens)?;
+                let atom = chematic_core::AtomIdx(i as u32);
+                let bond_on_right = fragment.mol.degree(atom) == 1
+                    && fragment.mol.neighbors(atom).any(|(other, _)| {
+                        positions[other.0 as usize].0 - positions[i].0 > bond * 0.1
+                    });
+                let text = display_label(
+                    &fragment.mol,
+                    i,
+                    config.carbons,
+                    config.hydrogens,
+                    bond_on_right,
+                )?;
                 glyphs
                     .atoms
                     .entry(text.clone())
@@ -322,7 +333,11 @@ impl<'a> Prepared<'a> {
                     let number = (i + 1).to_string();
                     let radius = label.map_or(0.0, |l| l.half_w.hypot(l.half_h));
                     let clearance = (stroke * 2.0).max(radius) + em * 0.53;
-                    let position = number_position(pos, center, clearance);
+                    let neighbors = fragment
+                        .mol
+                        .neighbors(chematic_core::AtomIdx(i as u32))
+                        .map(|(other, _)| positions[other.0 as usize]);
+                    let position = number_position(pos, center, clearance, neighbors);
                     number_positions.push(position);
                     if let Some(label) = glyphs
                         .numbers
@@ -521,17 +536,38 @@ impl<'a> Prepared<'a> {
     }
 }
 
-fn number_position(p: Pt, center: Pt, clearance: f32) -> Pt {
-    let (dx, dy) = (p.0 - center.0, p.1 - center.1);
-    let distance = dx.hypot(dy);
-    if distance <= 1e-3 {
-        (p.0 + clearance, p.1 + clearance)
-    } else {
-        (
-            p.0 + dx / distance * clearance,
-            p.1 + dy / distance * clearance,
-        )
+fn number_position(p: Pt, center: Pt, clearance: f32, neighbors: impl Iterator<Item = Pt>) -> Pt {
+    use std::f32::consts::{FRAC_PI_2, TAU};
+
+    let mut angles: Vec<_> = neighbors
+        .filter_map(|q| {
+            let (dx, dy) = (q.0 - p.0, q.1 - p.1);
+            (dx.hypot(dy) > 1e-3).then(|| dy.atan2(dx))
+        })
+        .collect();
+    angles.sort_unstable_by(f32::total_cmp);
+    if let Some(&first) = angles.first() {
+        angles.push(first + TAU);
     }
+
+    // Bisect the widest space between bonds. For equal gaps, prefer the
+    // direction away from the rest of the molecule.
+    let mut best_gap = 0.0;
+    let mut best_outward = f32::NEG_INFINITY;
+    let mut direction = -FRAC_PI_2;
+    for pair in angles.windows(2) {
+        let gap = pair[1] - pair[0];
+        let midpoint = pair[0] + gap * 0.5;
+        let (sin, cos) = midpoint.sin_cos();
+        let outward = (p.0 - center.0) * cos + (p.1 - center.1) * sin;
+        if gap > best_gap + 1e-3 || ((gap - best_gap).abs() <= 1e-3 && outward > best_outward) {
+            best_gap = gap;
+            best_outward = outward;
+            direction = midpoint;
+        }
+    }
+    let (sin, cos) = direction.sin_cos();
+    (p.0 + cos * clearance, p.1 + sin * clearance)
 }
 
 fn centroid(points: impl Iterator<Item = Pt>, count: usize) -> Pt {
