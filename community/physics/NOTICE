@@ -15,7 +15,7 @@ source, artwork, Python, Manim or pymunk is incorporated.
 WASM feasibility spike
 Rapier (rapier2d 0.36.1, commit 3406750a38286a0d3c7d0f4be2f9d53153e81d90)
 https://github.com/dimforge/rapier/tree/v0.36.1
-Apache License 2.0, reproduced in assets/rapier2d-LICENSE.
+Apache License 2.0.
 
 Evaluated Rapier with enhanced-determinism for disk and domino contacts in the
 AniMathIO WASM sandbox. The prototype built and rendered short scenes, but

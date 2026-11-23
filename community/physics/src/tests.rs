@@ -43,6 +43,18 @@ fn render_snapshot(list: &[ParamEntry], size: Size) -> String {
     }
 }
 
+fn readouts(list: &[ParamEntry]) -> Vec<String> {
+    render(list, CANVAS)
+        .unwrap()
+        .elements
+        .into_iter()
+        .filter_map(|element| match element {
+            DrawCommand::TextRun(text) if text.x == 16.0 => Some(text.text),
+            _ => None,
+        })
+        .collect()
+}
+
 const CANVAS: Size = Size {
     width: 1280,
     height: 720,
@@ -171,7 +183,8 @@ fn isolated_equal_mass_collision_obeys_restitution_and_conserves_momentum() {
             };
             let time = if speed == 5.0 { 0.85 } else { 0.2 };
             let state = sim::collision(2, speed, material, sim::Plan::new(time, 1.0), false);
-            let [a, b] = state.bodies.as_slice() else {
+            assert!(!state.boundary_impulse);
+            let [a, b] = state.motion.bodies.as_slice() else {
                 panic!("expected two disks")
             };
             assert!((a.vx + b.vx - speed).abs() < 1e-12);
@@ -180,6 +193,97 @@ fn isolated_equal_mass_collision_obeys_restitution_and_conserves_momentum() {
             let expected = 0.25 * speed.powi(2) * (1.0 + restitution.powi(2));
             assert!((energy - expected).abs() < 1e-12);
         }
+    }
+}
+
+#[test]
+fn default_collision_still_has_kinetic_energy_at_midpoint() {
+    let p = read_params(&[]).unwrap();
+    let state = sim::collision(
+        p.bodies,
+        p.speed,
+        p.material(),
+        sim::Plan::new(0.5, p.duration),
+        false,
+    );
+    let energy: f64 = state
+        .motion
+        .bodies
+        .iter()
+        .map(|body| 0.5 * p.mass * (body.vx.powi(2) + body.vy.powi(2)))
+        .sum();
+    assert!(energy > 0.0);
+    assert!(state.boundary_impulse);
+}
+
+fn domino_overlap(a: sim::Snapshot, b: sim::Snapshot) -> f64 {
+    let axes = |angle: f64| {
+        let (sin, cos) = angle.sin_cos();
+        [(cos, sin), (-sin, cos)]
+    };
+    let a_axes = axes(a.angle);
+    let b_axes = axes(b.angle);
+    let dot = |(x, y): (f64, f64), (u, v): (f64, f64)| x * u + y * v;
+    let radius = |axis, body_axes: [(f64, f64); 2]| {
+        sim::DOMINO_HX * dot(axis, body_axes[0]).abs()
+            + sim::DOMINO_HY * dot(axis, body_axes[1]).abs()
+    };
+    a_axes
+        .into_iter()
+        .chain(b_axes)
+        .map(|axis| {
+            radius(axis, a_axes) + radius(axis, b_axes) - dot(axis, (b.x - a.x, b.y - a.y)).abs()
+        })
+        .fold(f64::INFINITY, f64::min)
+}
+
+#[test]
+fn neighboring_dominoes_do_not_penetrate_during_replay() {
+    let p = read_params(&[]).unwrap();
+    let plan = sim::Plan::new(1.0, p.duration);
+    for count in [6, 12] {
+        for steps in 0..=plan.steps {
+            let sample = sim::Plan { steps, ..plan };
+            let state = sim::stack(count, p.speed, p.material(), sample, false);
+            for (index, pair) in state.bodies[1..].windows(2).enumerate() {
+                let overlap = domino_overlap(pair[0], pair[1]);
+                assert!(
+                    overlap < 0.001,
+                    "{count} dominoes, pair {index}, t = {:.4} s: {overlap:.6} m",
+                    sample.time()
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn domino_ball_rebounds_with_configured_restitution() {
+    let p = read_params(&[]).unwrap();
+    let sample = |restitution, time| {
+        let material = sim::Material {
+            restitution,
+            ..p.material()
+        };
+        sim::stack(
+            p.bodies,
+            p.speed,
+            material,
+            sim::Plan::new(time / p.duration, p.duration),
+            false,
+        )
+        .bodies[0]
+    };
+    assert_eq!(sample(0.0, 0.2).vx, 0.0);
+    let arm = sim::STACK_BALL_R;
+    let inertia = ((2.0 * sim::DOMINO_HX).powi(2) + (2.0 * sim::DOMINO_HY).powi(2)) / 3.0;
+    for restitution in [0.4, 0.8, 1.0] {
+        let after = sample(restitution, 0.2);
+        assert!(after.vx < 0.0);
+        let impulse = p.speed - after.vx;
+        let contact_speed = impulse * arm * arm / inertia;
+        assert!((contact_speed - after.vx - p.speed * restitution).abs() < 1e-12);
+        assert!(sample(restitution, 0.3).x < after.x);
     }
 }
 
@@ -211,9 +315,13 @@ fn contact_solvers_are_deterministic_at_maximum_work() {
         friction: 0.0,
     };
     let plan = sim::Plan::new(1.0, 30.0);
-    for solver in [sim::collision, sim::stack] {
-        let first = solver(12, 40.0, material, plan, true);
-        let second = solver(12, 40.0, material, plan, true);
+    let run = || {
+        [
+            sim::collision(12, 40.0, material, plan, true).motion,
+            sim::stack(12, 40.0, material, plan, true),
+        ]
+    };
+    for (first, second) in run().into_iter().zip(run()) {
         let bits =
             |body: &sim::Snapshot| [body.x, body.y, body.angle, body.vx, body.vy].map(f64::to_bits);
         assert!(first
@@ -229,11 +337,36 @@ fn contact_solvers_are_deterministic_at_maximum_work() {
             .flat_map(bits)
             .all(|value| f64::from_bits(value).is_finite()));
     }
-    let state = sim::collision(12, 40.0, material, plan, false);
+    let state = sim::collision(12, 40.0, material, plan, false).motion;
     assert!(state.trail.is_empty());
     for body in state.bodies {
         assert!((sim::BALL_RADIUS..=sim::ARENA_W - sim::BALL_RADIUS).contains(&body.x));
         assert!((sim::BALL_RADIUS..=sim::ARENA_H - sim::BALL_RADIUS).contains(&body.y));
+    }
+}
+
+#[test]
+fn solver_work_stays_within_published_bounds() {
+    let plan = sim::Plan::new(1.0, 30.0);
+    let material = sim::Material {
+        gravity: 30.0,
+        restitution: 1.0,
+        friction: 0.0,
+    };
+    // The README bounds disk work at 66 pair checks and two wall passes per step,
+    // and the domino row at two visits per pair per step. Measure both solvers
+    // at their heaviest settings and at the defaults.
+    for (bodies, speed, material) in [
+        (12, 40.0, material),
+        (6, 15.0, read_params(&[]).unwrap().material()),
+    ] {
+        let collision = sim::collision(bodies, speed, material, plan, false).motion;
+        assert!(collision.work.pair_checks > 0);
+        assert!(collision.work.pair_checks <= 66 * plan.steps as u32);
+        assert!(collision.work.wall_checks <= 24 * plan.steps as u32);
+        let stack = sim::stack(bodies, speed, material, plan, false);
+        assert!(stack.work.pair_checks > 0);
+        assert!(stack.work.pair_checks <= 2 * 11 * plan.steps as u32);
     }
 }
 
@@ -272,6 +405,87 @@ fn progress_changes_every_scene() {
         let end = render_snapshot(&list, CANVAS);
         assert_ne!(start, end, "{scene_name}");
     }
+}
+
+#[test]
+fn default_scenes_report_drawn_quantities() {
+    let mut actual = Vec::new();
+    for (name, _) in SCENES {
+        let list = [
+            ParamEntry {
+                id: "scene".into(),
+                value: ParamValue::EnumChoice(name.into()),
+            },
+            ParamEntry {
+                id: "progress".into(),
+                value: ParamValue::Number(0.5),
+            },
+        ];
+        actual.push(readouts(&list));
+    }
+    assert_eq!(
+        actual,
+        [
+            vec!["45.0° launch  |  Height = 1.6 m", "t = 2.00 s / 4.00 s"],
+            vec!["T = 2.56 s", "angle = 9.3 deg", "t = 2.00 s / 4.00 s"],
+            vec!["T = 2.46 s", "Extension = 1.68 m", "t = 2.00 s / 4.00 s"],
+            vec![
+                "Momentum (not conserved) = (-0.9, 0.0) kg m/s",
+                "Kinetic energy = 7.54 J",
+                "t = 2.00 s / 4.00 s"
+            ],
+            vec!["Toppled = 6/6", "t = 2.00 s / 4.00 s"],
+        ]
+    );
+}
+
+#[test]
+fn projectile_includes_the_selected_angle_and_frames_resting_bodies() {
+    let mut list = base_params();
+    with(&mut list, "progress", ParamValue::Number(0.5));
+    let p = read_params(&list).unwrap();
+    let angles: Vec<_> = launch_angles(&p).collect();
+    assert_eq!(angles, [36.0, 40.5, 48.0, 51.0, 54.0, 45.0]);
+    let radius = projectile_radius(p.speed);
+    let view = View::fit(&extent_for(&p).sanitized(), CANVAS, 0.07);
+    let (x, y) = analytic::projectile_position(p.speed, 45.0, p.gravity, 2.0);
+    let center = view.point(x, y + radius);
+    assert!(render(&list, CANVAS)
+        .unwrap()
+        .elements
+        .iter()
+        .any(|element| {
+            matches!(element, DrawCommand::FillPath((path, color))
+            if color.r == p.accent.r && color.g == p.accent.g && color.b == p.accent.b
+                && color.a == p.accent.a
+                && matches!(path.first(), Some(PathVerb::MoveTo(start))
+                    if start.x == center.x + view.dist(radius) && start.y == center.y))
+        }));
+    with(&mut list, "angle_deg", ParamValue::Number(0.0));
+    assert_eq!(readouts(&list)[0], "0.0° launch  |  Range = 0.0 m");
+    with(&mut list, "speed", ParamValue::Number(0.0));
+    let p = read_params(&list).unwrap();
+    assert_eq!(launch_angles(&p).collect::<Vec<_>>(), [0.0]);
+    let extent = extent_for(&p);
+    assert!(extent.max_x - extent.min_x >= 3.0 && extent.max_y - extent.min_y >= 2.0);
+    assert_eq!(readouts(&list)[0], "0.0° launch  |  Range = 0.0 m");
+}
+
+#[test]
+fn projectile_velocity_vectors_clear_the_ground_and_other_balls() {
+    let from = Point { x: 0.0, y: 30.0 };
+    let to = Point { x: 100.0, y: 80.0 };
+    let tip = clip_projectile_vector(from, to, 60.0, 10.0, std::iter::empty()).unwrap();
+    assert!((tip.y - 58.5).abs() < 1e-3);
+    assert!((tip.x - 57.0).abs() < 1e-3);
+    let level = Point { x: 100.0, y: 30.0 };
+    let ball = Point { x: 50.0, y: 30.0 };
+    let tip = clip_projectile_vector(from, level, 100.0, 10.0, std::iter::once(ball)).unwrap();
+    assert!(tip.x < 40.0);
+    let near = Point { x: 5.0, y: 30.0 };
+    assert!(clip_projectile_vector(from, level, 100.0, 10.0, std::iter::once(near)).is_none());
+    let shallow = Point { x: 100.0, y: 29.9 };
+    assert!(clip_projectile_vector(from, shallow, 35.0, 10.0, std::iter::empty()).is_none());
 }
 
 #[test]

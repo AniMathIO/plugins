@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import time
 import zipfile
 
 from PIL import Image
@@ -14,6 +15,7 @@ WORK = ROOT / 'target' / 'smoke'
 PLUGIN_ID = 'io.github.animathio.physics'
 BACKGROUND = (17, 20, 28)
 AMBER = (240, 150, 40)
+FOREGROUND = (226, 229, 235)
 SCENES = ('projectile', 'pendulum', 'spring', 'collision', 'stack')
 TICKS_PER_SECOND = 705_600_000
 
@@ -53,10 +55,12 @@ def main():
     )
 
     def run(*cmd):
+        start = time.perf_counter()
         result = subprocess.run([cli, *map(str, cmd)], env=env, text=True,
                                 capture_output=True, timeout=30)
         if result.returncode or 'warning:' in result.stderr.lower():
             raise RuntimeError(f'{cmd}\n{result.stdout}{result.stderr}')
+        return time.perf_counter() - start
 
     sample = WORK / 'sample.amio'
     sample.unlink(missing_ok=True)
@@ -69,17 +73,25 @@ def main():
     clip.update(animations=[], effects=[])
     clip['range']['end'] = 30 * TICKS_PER_SECOND
 
+    worst_stress = (0.0, '')
+
     def render(name, *, frame=0, expected_accent=AMBER, **params):
+        nonlocal worst_stress
         clip['kind'] = {'Plugin': {'plugin_id': PLUGIN_ID, 'params': params}}
         path = WORK / f'{name}.amio'
         with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as bundle:
             bundle.writestr('project.json', json.dumps(project))
         png = WORK / f'{name}.png'
         png.unlink(missing_ok=True)
-        run('render', path, '--frame', frame, '-o', png)
+        elapsed = run('render', path, '--frame', frame, '-o', png)
+        if params.get('duration_s') == 30:
+            worst_stress = max(worst_stress, (elapsed, name))
         with Image.open(png) as result:
             image = result.convert('RGB')
-        check_pixels(image, name, expected_accent)
+        # The launcher can roll out of frame after impact. Require a domino
+        # for stack frames and the highlighted body color for other scenes.
+        body_color = FOREGROUND if params.get('scene') == 'stack' else expected_accent
+        check_pixels(image, name, body_color)
         print('PASS', name)
         return image.tobytes()
 
@@ -128,6 +140,7 @@ def main():
            speed=40, bodies=12, gravity=0, expected_accent=None)
     render('no-gravity', scene='pendulum', gravity=0)
     render('flat-angle', scene='projectile', angle_deg=0, bodies=1, progress=0.5)
+    render('stationary-projectile', scene='projectile', speed=0, progress=0.5)
     render('single-body', scene='collision', bodies=1)
 
     clip['animations'] = [{'target': {'Param': 'progress'}, 'keys': {
@@ -144,6 +157,8 @@ def main():
         for name in screenshots:
             with Image.open(WORK / f'{name}.png') as image:
                 image.save(out / f'{name}.png', optimize=True)
+    elapsed, name = worst_stress
+    print(f'Slowest 30-second scene: {elapsed:.3f} s ({name}, including CLI startup and PNG encoding)')
     print('All released-host checks passed')
 
 

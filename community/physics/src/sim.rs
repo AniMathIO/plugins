@@ -50,9 +50,26 @@ pub struct Material {
     pub friction: f64,
 }
 
+/// Solver work counted per render, so tests can bound the fuel a scene needs.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Work {
+    /// Visits of the disk-contact loop and of the domino transfer/support loops.
+    pub pair_checks: u32,
+    /// Wall/containment checks on disks.
+    pub wall_checks: u32,
+}
+
 pub struct Simulation {
     pub bodies: Vec<Snapshot>,
     pub trail: Vec<(f64, f64)>,
+    /// Only the tests read this; the render ignores how much work it took.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub work: Work,
+}
+
+pub struct Collision {
+    pub motion: Simulation,
+    pub boundary_impulse: bool,
 }
 
 fn record(trail: &mut Vec<(f64, f64)>, body: Snapshot, step: usize, plan: Plan, enabled: bool) {
@@ -69,7 +86,7 @@ pub fn collision(
     material: Material,
     plan: Plan,
     trace: bool,
-) -> Simulation {
+) -> Collision {
     let mut bodies = Vec::with_capacity(count);
     bodies.push(Snapshot {
         x: 1.4,
@@ -86,31 +103,43 @@ pub fn collision(
     }
 
     let mut trail = Vec::new();
+    let mut work = Work::default();
+    let mut boundary_impulse = false;
     record(&mut trail, bodies[0], 0, plan, trace);
     for step in 1..=plan.steps {
         for body in &mut bodies {
             body.x += body.vx * plan.dt;
             body.y += (body.vy - 0.5 * material.gravity * plan.dt) * plan.dt;
             body.vy -= material.gravity * plan.dt;
-            contain(body, material);
+            boundary_impulse |= contain(body, material);
+            work.wall_checks += 1;
         }
         for i in 1..bodies.len() {
             let (earlier, later) = bodies.split_at_mut(i);
             for a in earlier {
                 contact(a, &mut later[0], material);
+                work.pair_checks += 1;
             }
         }
         // A pair's penetration correction can move a disk across a wall.
         for body in &mut bodies {
-            contain(body, material);
+            boundary_impulse |= contain(body, material);
+            work.wall_checks += 1;
         }
         record(&mut trail, bodies[0], step, plan, trace);
     }
-    Simulation { bodies, trail }
+    Collision {
+        motion: Simulation {
+            bodies,
+            trail,
+            work,
+        },
+        boundary_impulse,
+    }
 }
 
-fn contain(body: &mut Snapshot, material: Material) {
-    bound_axis(
+fn contain(body: &mut Snapshot, material: Material) -> bool {
+    let side = bound_axis(
         &mut body.x,
         &mut body.vx,
         &mut body.vy,
@@ -119,7 +148,7 @@ fn contain(body: &mut Snapshot, material: Material) {
         0.0,
     );
     // Treat very slow vertical bounces as resting contact to suppress chatter.
-    bound_axis(
+    let vertical = bound_axis(
         &mut body.y,
         &mut body.vy,
         &mut body.vx,
@@ -127,6 +156,7 @@ fn contain(body: &mut Snapshot, material: Material) {
         material,
         0.5,
     );
+    side || vertical
 }
 
 fn bound_axis(
@@ -136,12 +166,12 @@ fn bound_axis(
     length: f64,
     material: Material,
     rest_speed: f64,
-) {
+) -> bool {
     let min = BALL_RADIUS;
     let max = length - BALL_RADIUS;
     if (*position >= min || *normal_speed >= 0.0) && (*position <= max || *normal_speed <= 0.0) {
         *position = position.clamp(min, max);
-        return;
+        return false;
     }
     *position = position.clamp(min, max);
     let before = *normal_speed;
@@ -152,6 +182,7 @@ fn bound_axis(
     };
     let friction = material.friction * (*normal_speed - before).abs();
     *tangent_speed -= tangent_speed.clamp(-friction, friction);
+    true
 }
 
 fn contact(a: &mut Snapshot, b: &mut Snapshot, material: Material) {
@@ -201,6 +232,8 @@ struct Domino {
     angle: f64,
     omega: f64,
     hit_next: bool,
+    next_angle: f64,
+    support_angle: f64,
 }
 
 impl Domino {
@@ -225,31 +258,38 @@ pub fn stack(count: usize, speed: f64, material: Material, plan: Plan, trace: bo
         vx: speed,
         ..Snapshot::default()
     };
-    let mut blocks = vec![Domino::default(); count];
-    let mut trail = Vec::new();
     let ball_contact = FIRST_DOMINO - DOMINO_HX - STACK_BALL_R;
     let hit_angle = ((DOMINO_SPACING - BLOCK_WIDTH) / BLOCK_HEIGHT).asin();
+    let mut blocks = vec![
+        Domino {
+            support_angle: hit_angle,
+            ..Domino::default()
+        };
+        count
+    ];
+    let mut trail = Vec::new();
     let transfer = 0.5 * (1.0 + material.restitution);
     // Moment of inertia about a corner, divided by mass.
     let inertia = (BLOCK_WIDTH * BLOCK_WIDTH + BLOCK_HEIGHT * BLOCK_HEIGHT) / 3.0;
     let flat = std::f64::consts::FRAC_PI_2;
+    let slowdown = 0.05 * material.friction * material.gravity * plan.dt;
     let mut launched = false;
     record(&mut trail, ball, 0, plan, trace);
+    let mut work = Work::default();
     for step in 1..=plan.steps {
-        if !launched {
-            ball.vx = (ball.vx - 0.05 * material.friction * material.gravity * plan.dt).max(0.0);
-            ball.x += ball.vx * plan.dt;
-            if ball.x >= ball_contact {
-                // Project the ball's horizontal impulse onto the pivot's rotation.
-                let arm = STACK_BALL_R;
-                let impulse = (1.0 + material.restitution) * ball.vx / (1.0 + arm * arm / inertia);
-                blocks[0].omega = impulse * arm / inertia;
-                ball.x = ball_contact;
-                ball.vx = 0.0;
-                launched = true;
-            }
-            ball.angle = -(ball.x - BALL_START) / STACK_BALL_R;
+        ball.vx -= ball.vx.clamp(-slowdown, slowdown);
+        ball.x += ball.vx * plan.dt;
+        if !launched && ball.x >= ball_contact {
+            // Use restitution at the point of contact with the pivoted block.
+            let arm = STACK_BALL_R;
+            let impulse = (1.0 + material.restitution) * ball.vx / (1.0 + arm * arm / inertia);
+            blocks[0].omega = impulse * arm / inertia;
+            ball.x = ball_contact;
+            // Stop a non-rebounding ball at the base of the row.
+            ball.vx = (ball.vx - impulse).min(0.0);
+            launched = true;
         }
+        ball.angle = -(ball.x - BALL_START) / STACK_BALL_R;
 
         for block in &mut blocks {
             if block.angle == flat || (block.angle == 0.0 && block.omega == 0.0) {
@@ -267,6 +307,7 @@ pub fn stack(count: usize, speed: f64, material: Material, plan: Plan, trace: bo
         for i in 1..blocks.len() {
             let (earlier, later) = blocks.split_at_mut(i);
             let (block, next) = (&mut earlier[i - 1], &mut later[0]);
+            work.pair_checks += 1;
             if !block.hit_next && block.angle >= hit_angle {
                 // Keep enough information to transfer an impact even if the
                 // proposed angle crossed the contact in a single step.
@@ -278,13 +319,22 @@ pub fn stack(count: usize, speed: f64, material: Material, plan: Plan, trace: bo
             }
         }
         // A leaning block rests against the next block until it tips farther.
-        // Compute the support from the next block's rotated left face.
+        // Walk backward so the next block is already in its supported position.
         for i in (1..blocks.len()).rev() {
             let next = blocks[i].angle;
-            let limit = next + ((DOMINO_SPACING * next.cos() - BLOCK_WIDTH) / BLOCK_HEIGHT).asin();
             let block = &mut blocks[i - 1];
-            if block.angle > limit {
-                block.angle = limit;
+            work.pair_checks += 1;
+            if block.angle <= hit_angle {
+                continue;
+            }
+            // A settled neighbor offers the same support on every step.
+            if next != block.next_angle {
+                block.next_angle = next;
+                // An upright block first meets our top-right corner at hit_angle.
+                block.support_angle = support_limit(next).max(hit_angle);
+            }
+            if block.angle > block.support_angle {
+                block.angle = block.support_angle;
                 block.omega = 0.0;
             }
         }
@@ -299,5 +349,23 @@ pub fn stack(count: usize, speed: f64, material: Material, plan: Plan, trace: bo
                 .map(|(i, block)| block.snapshot(i)),
         )
         .collect();
-    Simulation { bodies, trail }
+    Simulation {
+        bodies,
+        trail,
+        work,
+    }
+}
+
+fn support_limit(next: f64) -> f64 {
+    let (sin, cos) = next.sin_cos();
+    // First vertex/face contact: our top-right corner on the next left face.
+    let left_face = next + ((DOMINO_SPACING * cos - BLOCK_WIDTH) / BLOCK_HEIGHT).asin();
+
+    // Opposite contact: either end of that face can reach our right face.
+    // The lower endpoint becomes the near end of the top edge once flat.
+    let left_x = DOMINO_SPACING - BLOCK_WIDTH * cos;
+    let left_y = BLOCK_WIDTH * sin;
+    let bottom_left = left_x.atan2(left_y);
+    let top_left = (left_x + BLOCK_HEIGHT * sin).atan2(left_y + BLOCK_HEIGHT * cos);
+    left_face.min(bottom_left).min(top_left)
 }

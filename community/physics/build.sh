@@ -15,8 +15,7 @@ with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
     z.write('plugin.toml', 'plugin.toml')
     z.write('NOTICE', 'NOTICE')
     z.write('../../LICENSE', 'LICENSE')
-    for notice in ['rapier2d-LICENSE', 'manim-physics-LICENSE']:
-        z.write('assets/' + notice, 'licenses/' + notice)
+    z.write('assets/manim-physics-LICENSE', 'licenses/manim-physics-LICENSE')
     build_dir = pathlib.Path(os.environ.get("CARGO_TARGET_DIR") or "target")
     z.write(build_dir / "wasm32-wasip2" / "release" / f"{name.replace('-', '_')}.wasm", "plugin.wasm")
 print(out)

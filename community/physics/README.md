@@ -10,9 +10,9 @@ Plugin ID `io.github.animathio.physics` · ABI 1.1.0 · MIT
 | --- | --- | --- |
 | ![Projectile paths with velocity arrows](screenshots/projectile-050.png) | ![Pendulum with a trail and period readout](screenshots/pendulum-050.png) | ![Spring with an equilibrium marker](screenshots/spring-050.png) |
 
-| Elastic collision | Fully inelastic collision | Dominoes |
-| --- | --- | --- |
-| ![Elastic collision transfers the launch velocity](screenshots/collision-elastic.png) | ![Inelastic collision shares the launch velocity](screenshots/collision-inelastic.png) | ![Dominoes partway through the chain reaction](screenshots/stack-chain.png) |
+| Default collision | Elastic collision | Fully inelastic collision | Dominoes |
+| --- | --- | --- | --- |
+| ![Six disks in motion at two seconds](screenshots/collision-050.png) | ![Elastic collision transfers the launch velocity](screenshots/collision-elastic.png) | ![Inelastic collision shares the launch velocity](screenshots/collision-inelastic.png) | ![Dominoes partway through the chain reaction](screenshots/stack-chain.png) |
 
 ## Use in AniMathIO
 
@@ -27,15 +27,16 @@ gravity keyframe changes the entire computed trajectory for that frame.
 
 | Scene | Motion and readouts |
 | --- | --- |
-| `projectile` | A single launch or a fan spanning up to ±9° around the chosen angle. Shows height or landing range for the chosen angle, with trails and arrows for the moving bodies. |
+| `projectile` | Highlights the selected launch angle and shows that body's height or landing range. With multiple bodies, secondary paths fan out by up to 9° on each side. Velocity arrows shorten or disappear near the floor or another ball. |
 | `pendulum` | A bob released from rest. Shows the current angle and the full-amplitude period from the elliptic-integral formula. |
 | `spring` | A vertical Hooke oscillator released from rest at 30% beyond equilibrium. The spring is tuned so its static extension equals **Length**. Shows its period and extension. |
-| `collision` | Equal-mass disks in a 12 × 5 m arena. Shows the disks' total momentum and translational kinetic energy. The walls can exchange momentum with the disks. |
-| `stack` | A rolling ball tips the first domino in a row. Contacts trigger the remaining dominoes, and the readout counts how many have tipped past 0.6 radians. |
+| `collision` | Equal-mass disks in a 12 × 5 m arena. Shows their total momentum and translational kinetic energy. The momentum readout flags exchanges with the arena and the effect of gravity. |
+| `stack` | A rolling ball rebounds off the first domino and tips it. Contacts trigger the remaining dominoes, and the readout counts how many have tipped past 0.6 radians. |
 
-To compare collision types, set **Bodies** to 2, **Speed** to 5 m/s, and
-**Gravity** and **Friction** to 0. At 0.85 s the first collision is over and the
-walls have yet to act. With 1 kg disks, momentum is 5 kg·m/s in both cases.
+To compare collision types, set **Bodies** to 2, **Speed** to 5 m/s,
+**Gravity** and **Friction** to 0, **Duration** to 1 s and **Progress** to 0.85.
+At 0.85 s the first collision is over and the walls have yet to act.
+With 1 kg disks, momentum is 5 kg·m/s in both cases.
 **Restitution** 1 transfers the launch velocity to the second disk while
 preserving 12.5 J of kinetic energy. **Restitution** 0 leaves both disks moving
 at 2.5 m/s with 6.25 J in total.
@@ -53,8 +54,8 @@ at 2.5 m/s with 6.25 J in total.
 | `speed` | 15 | 0–40 m/s initial speed for projectiles, the first disk, or the domino launcher |
 | `angle_deg` | 45 | 0–90° launch angle or pendulum release angle |
 | `length_m` | 1.5 | 0.2–10 m pendulum length or spring equilibrium extension |
-| `restitution` | 0.8 | 0–1 coefficient of restitution for disk contacts and impact transfer in the domino row |
-| `friction` | 0.8 | 0–1 tangential friction for disk contacts and rolling resistance in the domino launcher |
+| `restitution` | 0.8 | 0–1 coefficient of restitution for disk contacts, the launcher rebound and impact transfer in the domino row |
+| `friction` | 0 | 0–1 tangential friction for disk contacts and rolling resistance in the domino launcher |
 | `show_vectors` | true | Show velocity arrows |
 | `show_trail` | true | Show motion traces |
 | `show_ground` | true | Show the metre scale for projectile, collision and stack |
@@ -81,12 +82,13 @@ CARGO_BUILD_JOBS=2 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 nice -n 19 ioni
 python3 community/physics/smoke.py /path/to/animathio-cli community/physics/target
 ```
 
-The native tests check analytic motion, collision momentum and energy, domino
-propagation, deterministic replay and operation counts. The smoke test uses the
+The native tests check analytic motion, scene readouts, collision momentum and energy,
+domino propagation and separation, deterministic replay and operation counts. The smoke test uses the
 released 2.3.0 CLI and checks every scene at five progress values, including a
 host-sampled keyframe and repeated 30-second renders with 12 bodies. It checks
 the background and body colors so an error placeholder fails the test. Add
-`--screenshots` to regenerate the PNGs in [screenshots](screenshots/).
+`--screenshots` to regenerate the PNGs in [screenshots](screenshots/). The
+stress summary measures elapsed CLI time, including startup and PNG encoding.
 
 ## Simulation and credits
 
@@ -99,5 +101,5 @@ and prior calls have no effect. Labels use the host's vector text command.
 
 The scene selection draws on [manim-physics](https://github.com/Matheart/manim-physics).
 The Rapier WASM spike exceeded the sandbox budget in the heaviest 30-second cases,
-so the component uses a small purpose-built solver. The original license texts
-and details of what was studied are in [NOTICE](NOTICE).
+so the component uses a small purpose-built solver. Credits and details of what
+was studied are in [NOTICE](NOTICE).

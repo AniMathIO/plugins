@@ -55,6 +55,10 @@ const SCENES: [(&str, Demo); 5] = [
     ("stack", Demo::Stack),
 ];
 
+const DEFAULT_RESTITUTION: f64 = 0.8;
+const DEFAULT_FRICTION: f64 = 0.0;
+const VELOCITY_WIDTH: f32 = 2.5;
+
 fn read_params(list: &[ParamEntry]) -> Result<Params, Diagnostic> {
     let name = string(list, "scene", "projectile");
     let scene = SCENES
@@ -72,8 +76,8 @@ fn read_params(list: &[ParamEntry]) -> Result<Params, Diagnostic> {
         speed: number(list, "speed", 15.0, 0.0, 40.0)?,
         angle_deg: number(list, "angle_deg", 45.0, 0.0, 90.0)?,
         length_m: number(list, "length_m", 1.5, 0.2, 10.0)?,
-        restitution: number(list, "restitution", 0.8, 0.0, 1.0)?,
-        friction: number(list, "friction", 0.8, 0.0, 1.0)?,
+        restitution: number(list, "restitution", DEFAULT_RESTITUTION, 0.0, 1.0)?,
+        friction: number(list, "friction", DEFAULT_FRICTION, 0.0, 1.0)?,
         show_vectors: boolean(list, "show_vectors", true),
         show_trail: boolean(list, "show_trail", true),
         show_ground: boolean(list, "show_ground", true),
@@ -108,8 +112,8 @@ impl Guest for PhysicsPlay {
                 num_param("speed", "Speed (m/s)", 0.0, 40.0, 15.0, 0.1),
                 num_param("angle_deg", "Angle (deg)", 0.0, 90.0, 45.0, 1.0),
                 num_param("length_m", "Length (m)", 0.2, 10.0, 1.5, 0.1),
-                num_param("restitution", "Restitution", 0.0, 1.0, 0.8, 0.05),
-                num_param("friction", "Friction", 0.0, 1.0, 0.8, 0.05),
+                num_param("restitution", "Restitution", 0.0, 1.0, DEFAULT_RESTITUTION, 0.05),
+                num_param("friction", "Friction", 0.0, 1.0, DEFAULT_FRICTION, 0.05),
                 bool_param("show_vectors", "Velocity vectors", true),
                 bool_param("show_trail", "Trail", true),
                 bool_param("show_ground", "Ground scale", true),
@@ -127,16 +131,25 @@ impl Guest for PhysicsPlay {
     }
 }
 
-/// Launch angles for `count` projectiles: evenly spread ±9° around `angle_deg`.
-fn launch_angles(angle_deg: f64, count: usize) -> impl Iterator<Item = f64> {
-    (0..count).map(move |index| {
-        if count == 1 {
-            return angle_deg;
-        }
-        let low = (angle_deg - 9.0).max(0.0);
-        let high = (angle_deg + 9.0).min(90.0);
-        low + (high - low) * index as f64 / (count - 1) as f64
-    })
+/// Space the secondary launches on either side of the selected angle, which
+/// comes last so its body is on top when the paths overlap.
+fn launch_angles(p: &Params) -> impl Iterator<Item = f64> {
+    let angle = p.angle_deg;
+    let low = (angle - 9.0).max(0.0);
+    let high = (angle + 9.0).min(90.0);
+    let others = if p.speed == 0.0 { 0 } else { p.bodies - 1 };
+    let right = if low == angle {
+        others
+    } else if high == angle {
+        0
+    } else {
+        others.div_ceil(2)
+    };
+    let left = others - right;
+    (0..left)
+        .map(move |i| low + (angle - low) * i as f64 / left as f64)
+        .chain((1..=right).map(move |i| angle + (high - angle) * i as f64 / right as f64))
+        .chain(std::iter::once(angle))
 }
 
 fn render(list: &[ParamEntry], size: Size) -> Result<Scene, Diagnostic> {
@@ -169,7 +182,7 @@ fn extent_for(p: &Params) -> Extent {
             let mut extent = Extent::new();
             let radius = projectile_radius(p.speed);
             extent.add(0.0, 0.0);
-            for angle in launch_angles(p.angle_deg, p.bodies) {
+            for angle in launch_angles(p) {
                 let flight = analytic::flight_time(p.speed, angle, p.gravity)
                     .unwrap_or(p.duration)
                     .min(p.duration);
@@ -184,6 +197,9 @@ fn extent_for(p: &Params) -> Extent {
                 }
             }
             extent.pad(radius + 0.4);
+            // Retain a metre scale even for a stationary ball or a ground launch.
+            extent.add(-1.5, -0.75);
+            extent.add(1.5, 1.5);
             extent
         }
         Demo::Pendulum => {
@@ -261,9 +277,21 @@ fn velocity_arrow(
     body_radius_m: f64,
     accent: Color,
 ) {
+    if let Some((from, to)) = velocity_segment(view, size, (x, y), (vx, vy), body_radius_m) {
+        painter.arrow(from, to, VELOCITY_WIDTH, with_alpha(accent, 220));
+    }
+}
+
+fn velocity_segment(
+    view: &View,
+    size: Size,
+    (x, y): (f64, f64),
+    (vx, vy): (f64, f64),
+    body_radius_m: f64,
+) -> Option<(Point, Point)> {
     let speed = (vx * vx + vy * vy).sqrt();
     if speed < 2e-2 {
-        return;
+        return None;
     }
     let short = size.width.min(size.height) as f64;
     let radius_px = view.dist(body_radius_m) as f64;
@@ -283,12 +311,58 @@ fn velocity_arrow(
         x: from.x + (ux * shaft) as f32,
         y: from.y - (uy * shaft) as f32,
     };
-    painter.arrow(from, to, 2.5, with_alpha(accent, 220));
+    Some((from, to))
 }
 
-fn trail_stroke(painter: &mut Painter, view: &View, points: &[(f64, f64)]) {
+/// Clip the vector along its original direction, allowing room for the head
+/// and shaft. The painter omits vectors that become too short to read.
+fn clip_projectile_vector(
+    from: Point,
+    to: Point,
+    ground_y: f32,
+    radius: f32,
+    other_balls: impl Iterator<Item = Point>,
+) -> Option<Point> {
+    let (dx, dy) = (to.x - from.x, to.y - from.y);
+    let mut length = dx.hypot(dy);
+    let (ux, uy) = (dx / length, dy / length);
+    let (head, half_head) = draw::arrow_head(VELOCITY_WIDTH);
+    let ground = ground_y - 1.5;
+    if from.y + VELOCITY_WIDTH / 2.0 > ground {
+        return None;
+    }
+    let tip_clearance = (ux.abs() * half_head - uy * head)
+        .max(VELOCITY_WIDTH / 2.0 - uy * head * 0.9)
+        .max(0.0);
+    let room = ground - from.y - tip_clearance;
+    if uy > 0.0 {
+        length = length.min(room / uy);
+    }
+
+    // Enclose the arrow in a swept disk to clear each other ball at the head
+    // as well as along the shaft.
+    let clearance = radius + half_head.max(VELOCITY_WIDTH / 2.0) + 1.0;
+    for center in other_balls {
+        let (x, y) = (center.x - from.x, center.y - from.y);
+        let along = x * ux + y * uy;
+        let across = x * uy - y * ux;
+        let intersection = clearance * clearance - across * across;
+        if intersection > 0.0 {
+            let half_chord = intersection.sqrt();
+            if along + half_chord >= 0.0 {
+                length = length.min(along - half_chord);
+            }
+        }
+    }
+    (length > 0.0 && length * uy <= room + 1e-3).then_some(Point {
+        x: from.x + ux * length,
+        y: from.y + uy * length,
+    })
+}
+
+fn trail_stroke(painter: &mut Painter, view: &View, points: &[(f64, f64)], color: Color) {
     let canvas_points: Vec<Point> = points.iter().map(|(x, y)| view.point(*x, *y)).collect();
-    painter.dashed(&canvas_points, 1.8, with_alpha(TRAIL, 165), 8.0, 6.5);
+    painter.dashed(&canvas_points, 1.8, with_alpha(color, 165), 8.0, 6.5);
 }
 
 fn projectile_radius(speed: f64) -> f64 {
@@ -308,10 +382,19 @@ fn draw_projectile(
         draw::draw_ground(painter, view, extent.min_x, extent.max_x, 5, size, tick);
     }
     let radius = projectile_radius(p.speed);
-    for angle in launch_angles(p.angle_deg, p.bodies) {
-        let (t, landed) = projectile_time(p, angle, sim_time);
-        let (x, y) = analytic::projectile_position(p.speed, angle, p.gravity, t);
-        let draw_y = y + radius;
+    let radius_px = view.dist(radius);
+    let launches: Vec<_> = launch_angles(p)
+        .map(|angle| {
+            let (t, landed) = projectile_time(p, angle, sim_time);
+            let (x, y) = analytic::projectile_position(p.speed, angle, p.gravity, t);
+            (angle, t, landed, x, y.max(0.0))
+        })
+        .collect();
+    let centers: Vec<_> = launches
+        .iter()
+        .map(|&(_, _, _, x, y)| view.point(x, y + radius))
+        .collect();
+    for (index, &(angle, t, _, _, _)) in launches.iter().enumerate() {
         if p.show_trail && t > 0.0 {
             let trace: Vec<_> = (0..=120)
                 .map(|step| {
@@ -324,32 +407,53 @@ fn draw_projectile(
                     (x, y + radius)
                 })
                 .collect();
-            trail_stroke(painter, view, &trace);
+            let color = if index + 1 == launches.len() {
+                p.accent
+            } else {
+                TRAIL
+            };
+            trail_stroke(painter, view, &trace, color);
         }
-        let center = view.point(x, draw_y);
-        let outline = circle_path(center.x, center.y, view.dist(radius));
-        painter.fill(outline.clone(), p.accent);
+    }
+    let ground = view.point(0.0, 0.0).y;
+    for (index, &(angle, t, landed, x, y)) in launches.iter().enumerate() {
+        let highlight = index + 1 == launches.len();
+        let color = if highlight { p.accent } else { FOREGROUND };
+        let center = centers[index];
+        let outline = circle_path(center.x, center.y, radius_px);
+        painter.fill(outline.clone(), color);
         painter.stroke(outline, 1.5, with_alpha(FOREGROUND, 200));
         if p.show_vectors && !landed {
             let velocity = analytic::projectile_velocity(p.speed, angle, p.gravity, t);
-            velocity_arrow(painter, view, size, (x, draw_y), velocity, radius, p.accent);
+            let others = centers
+                .iter()
+                .enumerate()
+                .filter_map(|(i, &point)| (i != index).then_some(point));
+            if let Some((from, to)) =
+                velocity_segment(view, size, (x, y + radius), velocity, radius)
+            {
+                if let Some(tip) = clip_projectile_vector(from, to, ground, radius_px, others) {
+                    painter.arrow(from, tip, VELOCITY_WIDTH, with_alpha(color, 220));
+                }
+            }
         }
     }
-    let (t, landed) = projectile_time(p, p.angle_deg, sim_time);
-    let (x, y) = analytic::projectile_position(p.speed, p.angle_deg, p.gravity, t);
-    readout_lines(
-        painter,
-        &[if landed {
-            format!("Range = {x:.1} m")
-        } else {
-            format!("Height = {:.1} m", y.max(0.0))
-        }],
-        font,
-    );
+    let &(angle, _, landed, x, y) = launches
+        .last()
+        .expect("the selected launch is always present");
+    let result = if landed {
+        format!("Range = {x:.1} m")
+    } else {
+        format!("Height = {y:.1} m")
+    };
+    readout_lines(painter, &[format!("{angle:.1}° launch  |  {result}")], font);
     time_readout(painter, size, sim_time, p.duration, font);
 }
 
 fn projectile_time(p: &Params, angle: f64, time: f64) -> (f64, bool) {
+    if p.speed == 0.0 {
+        return (0.0, true);
+    }
     match analytic::flight_time(p.speed, angle, p.gravity) {
         Some(flight) if time >= flight => (flight, true),
         _ => (time, false),
@@ -393,7 +497,7 @@ fn draw_pendulum(painter: &mut Painter, view: &View, p: &Params, sim_time: f64, 
         let trace: Vec<_> = (0..=80)
             .map(|step| analytic::pendulum_bob(l, theta0 + (end - theta0) * f64::from(step) / 80.0))
             .collect();
-        trail_stroke(painter, view, &trace);
+        trail_stroke(painter, view, &trace, TRAIL);
     }
     ceiling_mount(painter, view, 0.0, 0.35 * l, 0.0);
     let pivot = view.point(0.0, 0.0);
@@ -436,7 +540,7 @@ fn draw_spring(painter: &mut Painter, view: &View, p: &Params, sim_time: f64, si
     if p.show_trail && omega > 0.0 {
         let first_half = sim_time.min(std::f64::consts::PI / omega);
         let end = -l - analytic::spring_offset(amplitude, omega, first_half);
-        trail_stroke(painter, view, &[(0.0, -l - amplitude), (0.0, end)]);
+        trail_stroke(painter, view, &[(0.0, -l - amplitude), (0.0, end)], TRAIL);
     }
     ceiling_mount(painter, view, 0.0, 0.3 * l, 0.0);
     // Coil: zigzag between the anchor and the top of the mass.
@@ -517,11 +621,11 @@ fn draw_collision(painter: &mut Painter, view: &View, p: &Params, size: Size) {
 
     let plan = sim::Plan::new(p.progress, p.duration);
     let state = sim::collision(p.bodies, p.speed, p.material(), plan, p.show_trail);
-    trail_stroke(painter, view, &state.trail);
+    trail_stroke(painter, view, &state.motion.trail, TRAIL);
     let mut px = 0.0;
     let mut py = 0.0;
     let mut ke = 0.0;
-    for (index, body) in state.bodies.into_iter().enumerate() {
+    for (index, body) in state.motion.bodies.into_iter().enumerate() {
         px += p.mass * body.vx;
         py += p.mass * body.vy;
         ke += 0.5 * p.mass * (body.vx * body.vx + body.vy * body.vy);
@@ -542,9 +646,14 @@ fn draw_collision(painter: &mut Painter, view: &View, p: &Params, size: Size) {
             );
         }
     }
+    let momentum = if state.boundary_impulse || (plan.steps > 0 && p.gravity > 0.0) {
+        "Momentum (not conserved)"
+    } else {
+        "Momentum"
+    };
     let lines = [
-        format!("Momentum = ({px:.1}, {py:.1}) kg m/s"),
-        format!("Kinetic energy = {ke:.1} J"),
+        format!("{momentum} = ({px:.1}, {py:.1}) kg m/s"),
+        format!("Kinetic energy = {ke:.2} J"),
     ];
     readout_lines(painter, &lines, font);
     time_readout(painter, size, plan.time(), p.duration, font);
@@ -556,8 +665,12 @@ fn draw_stack(painter: &mut Painter, view: &View, extent: &Extent, p: &Params, s
         draw::draw_ground(painter, view, extent.min_x, extent.max_x, 2, size, tick);
     }
     let plan = sim::Plan::new(p.progress, p.duration);
-    let state = sim::stack(p.bodies, p.speed, p.material(), plan, p.show_trail);
-    trail_stroke(painter, view, &state.trail);
+    let mut state = sim::stack(p.bodies, p.speed, p.material(), plan, p.show_trail);
+    for (x, _) in &mut state.trail {
+        *x = x.max(extent.min_x);
+    }
+    state.trail.dedup();
+    trail_stroke(painter, view, &state.trail, TRAIL);
 
     let ball = state.bodies[0];
     let center = view.point(ball.x, ball.y);

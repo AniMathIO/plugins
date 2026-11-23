@@ -149,6 +149,11 @@ pub fn with_alpha(mut c: Color, a: u8) -> Color {
     c
 }
 
+pub fn arrow_head(width: f32) -> (f32, f32) {
+    let length = width * 3.0 + 7.0;
+    (length, length * 0.42)
+}
+
 pub const FOREGROUND: Color = Color {
     r: 226,
     g: 229,
@@ -205,7 +210,7 @@ impl Painter {
         let dx = to.x - from.x;
         let dy = to.y - from.y;
         let len = (dx * dx + dy * dy).sqrt();
-        let head = width * 3.0 + 7.0;
+        let (head, half) = arrow_head(width);
         if len < head * 1.4 {
             return; // too short to read as an arrow
         }
@@ -215,7 +220,6 @@ impl Painter {
             y: to.y - uy * head * 0.9,
         };
         self.line(from, shaft_end, width, color);
-        let half = head * 0.42;
         let tip_a = Point {
             x: to.x - ux * head - uy * half,
             y: to.y - uy * head + ux * half,
