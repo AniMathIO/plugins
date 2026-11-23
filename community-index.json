@@ -77,6 +77,25 @@
       "sha256": "f77712a165a3533e7ce75630ab7b582192b8dc897c0e54a0dff462ceb54eef07",
       "size": 92227,
       "released_at": "2026-11-23T09:05:47Z"
+    },
+    {
+      "id": "io.github.animathio.physics",
+      "name": "Physics Play",
+      "author": "AniMathIO",
+      "description": "Deterministic 2D mechanics demos: projectile, pendulum, spring, collisions and falling stacks",
+      "license": "MIT",
+      "repo": "AniMathIO/plugins",
+      "path": "community/physics",
+      "source_url": "https://github.com/AniMathIO/plugins/tree/HEAD/community/physics",
+      "kinds": [
+        "clip-source"
+      ],
+      "min_abi": "1.1.0",
+      "version": "0.1.0",
+      "download_url": "https://github.com/AniMathIO/plugins/releases/download/io.github.animathio.physics%400.1.0/io.github.animathio.physics-0.1.0.amplugin",
+      "sha256": "82a8fc8801594542e55a00eede7052a850d06f2d469d4356ddba13a692a13813",
+      "size": 76133,
+      "released_at": "2026-11-23T09:27:00Z"
     }
   ],
   "delisted": []
