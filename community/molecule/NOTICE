@@ -1,0 +1,29 @@
+Molecule Studio for AniMathIO
+Copyright (c) 2026 AniMathIO contributors. MIT (see ../../LICENSE).
+
+Compiled chemistry dependency:
+chematic 1.2.3, Kentaro Tanabe (kent-tokyo), MIT OR Apache-2.0
+https://github.com/kent-tokyo/chematic/tree/f63733dec7ae8a63262e9ec0c29cd916b2e7954b
+Copyright (c) 2026 Kentaro Tanabe (kent-tokyo).
+Both upstream licenses are retained in assets/chematic-LICENSE-MIT and
+assets/chematic-LICENSE-APACHE. Cargo.lock records the exact packages.
+Molecule Studio uses chematic-core, chematic-smiles, chematic-perception and
+chematic-depict directly for SMILES parsing, valence and hydrogen counts,
+ring perception, 2D coordinates, Kekule bond assignment and CPK colors.
+The upstream source is used through these dependencies without modification.
+
+Animation reference:
+manim-Chemistry, UnMolDeQuimica contributors, MIT
+https://github.com/UnMolDeQuimica/manim-Chemistry/tree/c03147d4f9374cd75b58257962210e9020895d15
+Copyright (c) 2023 UMDQ. License in assets/manim-Chemistry-LICENSE.
+GraphMolecule construction and the staging of reaction examples informed the
+write-on design. All animation code and assets in Molecule Studio are original.
+
+Molecule Studio implements the vector bond and label rendering, fit, highlight
+and reveal logic, reaction arrows and spacing, and tetrahedral wedge/dash
+assignment from the ligand order recorded by chematic. The tetrahedral rules
+follow section 3.8.2 of OpenSMILES (https://opensmiles.org/opensmiles.html).
+The explicit water depiction uses the measured H–O–H angle reported by the
+NIST CCCBDB (https://cccbdb.nist.gov/expangle2x.asp?all=0&descript=aHOH).
+The host supplies the glyph outlines through shape-text. The bundle includes
+no fonts.

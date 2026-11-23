@@ -1,0 +1,26 @@
+[package]
+name = "molecule"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = "=0.40.0"
+# Chemistry engine (SMILES parsing, perception, 2D depiction layout, CPK palette).
+# MIT OR Apache-2.0; pinned exactly and credited in NOTICE with upstream licenses
+# under assets/.
+chematic-core = "=1.2.3"
+chematic-smiles = { version = "=1.2.3", default-features = false }
+chematic-perception = { version = "=1.2.3", default-features = false }
+chematic-depict = { version = "=1.2.3", default-features = false }
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = "debuginfo"
+
+[workspace]

@@ -11,6 +11,16 @@
       "path": "community/code-snippets",
       "license": "MIT AND OFL-1.1",
       "min_abi": "1.1.0"
+    },
+    {
+      "id": "io.github.animathio.molecule",
+      "name": "Molecule Studio",
+      "author": "AniMathIO",
+      "description": "Self-drawing 2D molecular structures and reactions from SMILES, with CPK colors and wedge/dash stereo",
+      "repo": "AniMathIO/plugins",
+      "path": "community/molecule",
+      "license": "MIT",
+      "min_abi": "1.1.0"
     }
   ],
   "delisted": []
