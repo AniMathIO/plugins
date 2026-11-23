@@ -1,0 +1,19 @@
+[package]
+name = "optics"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = "=0.40.0"
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = "debuginfo"
+
+[workspace]

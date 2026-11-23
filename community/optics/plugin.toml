@@ -1,0 +1,7 @@
+api_version = "1.1.0"
+id = "io.github.animathio.optics"
+name = "Ray Optics"
+version = "0.1.0"
+description = "Animated ray-optics diagrams: thin lens and mirror principal rays, Snell refraction, total internal reflection and prism dispersion"
+kinds = ["clip-source"]
+capabilities = []
